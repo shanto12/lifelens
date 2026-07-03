@@ -1,0 +1,15 @@
+{
+  "slug": "lifelens",
+  "publicTitle": "LifeLens — Personal Life & Money Copilot",
+  "targetCompany": null,
+  "targetRole": "Personal AI systems / agentic automation",
+  "archetype": "vite-react-ai-demo",
+  "status": "shipped",
+  "routes": ["/", "/api/health", "/api/snapshot"],
+  "netlifySite": "88af8825-dbb4-4a93-83fe-dbbbde7d5674",
+  "productionUrl": "https://lifelens-copilot.netlify.app",
+  "repoUrl": "https://github.com/shanto12/lifelens",
+  "previewPolicy": "public-with-owner-access-code",
+  "dataPolicy": "synthetic-public-real-data-behind-access-code",
+  "packageMode": "personal-tool-and-portfolio"
+}
