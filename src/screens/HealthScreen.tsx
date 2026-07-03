@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { AlertTriangle, HeartPulse, Lightbulb, Utensils } from 'lucide-react'
 import type { ScreenProps } from '../lib/screen-props'
 import type { HealthSignalFlag, SpendCategory } from '../lib/types'
@@ -67,56 +68,69 @@ function ShareBar({ label, value, color }: { label: string; value: number; color
 }
 
 export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
-  const flags: HealthSignalFlag[] = computeHealthFlags(snapshot)
+  // computeHealthFlags recomputes analytics internally, so it's the most
+  // expensive call on this screen — memoize it (and the derived lists) so a
+  // parent re-render with an unchanged snapshot/analytics doesn't redo the work.
+  const { flags, healthTx, healthTotal, swaps, wellbeingEvents } = useMemo(() => {
+    const computedFlags: HealthSignalFlag[] = computeHealthFlags(snapshot)
+
+    const tx = snapshot.transactions
+      .filter((t) => t.category === 'health')
+      .sort((a, b) => b.date.localeCompare(a.date))
+    const total = tx.reduce((sum, t) => sum + (t.amount ?? 0), 0)
+
+    const ai: SwapView[] = snapshot.alternatives
+      .filter((a) => a.healthNote !== null)
+      .map((a) => ({
+        key: `alt-${a.id}`,
+        forMerchant: a.merchant,
+        name: a.name,
+        healthNote: a.healthNote ?? '',
+        qualityNote: a.qualityNote,
+        annualSavings: a.annualSavings,
+        url: a.url,
+      }))
+
+    const fallback: SwapView[] =
+      ai.length > 0
+        ? []
+        : snapshot.subscriptions
+            .filter((s) => s.status === 'active' || s.status === 'trial')
+            .flatMap((s) => {
+              const entry = FALLBACK_SWAPS.find((f) => f.match.includes(s.category))
+              if (!entry) return []
+              return [
+                {
+                  key: `catalog-${s.id}`,
+                  forMerchant: s.merchant,
+                  name: entry.name,
+                  healthNote: entry.healthNote,
+                  qualityNote: entry.qualityNote,
+                  annualSavings: null,
+                  url: null,
+                },
+              ]
+            })
+
+    const wellbeing = snapshot.events
+      .filter((e) => e.kind === 'fitness' || e.kind === 'health')
+      .sort((a, b) => b.date.localeCompare(a.date))
+
+    return {
+      flags: computedFlags,
+      healthTx: tx,
+      healthTotal: total,
+      swaps: ai.length > 0 ? ai : fallback,
+      wellbeingEvents: wellbeing,
+    }
+    // All inputs derive solely from `snapshot`; analytics (which shares the same
+    // snapshot source) recomputes in lockstep, so `snapshot` is the correct key.
+  }, [snapshot])
 
   const { frequentItems, dietaryNotes } = snapshot.profile.summary.foodPreferences
 
-  const healthTx = snapshot.transactions
-    .filter((t) => t.category === 'health')
-    .sort((a, b) => b.date.localeCompare(a.date))
-  const healthTotal = healthTx.reduce((sum, t) => sum + (t.amount ?? 0), 0)
-
   const diningShare = analytics.byCategory.find((c) => c.category === 'dining')?.pctOfTotal ?? 0
   const groceriesShare = analytics.byCategory.find((c) => c.category === 'groceries')?.pctOfTotal ?? 0
-
-  const aiSwaps: SwapView[] = snapshot.alternatives
-    .filter((a) => a.healthNote !== null)
-    .map((a) => ({
-      key: `alt-${a.id}`,
-      forMerchant: a.merchant,
-      name: a.name,
-      healthNote: a.healthNote ?? '',
-      qualityNote: a.qualityNote,
-      annualSavings: a.annualSavings,
-      url: a.url,
-    }))
-
-  const fallbackSwaps: SwapView[] =
-    aiSwaps.length > 0
-      ? []
-      : snapshot.subscriptions
-          .filter((s) => s.status === 'active' || s.status === 'trial')
-          .flatMap((s) => {
-            const entry = FALLBACK_SWAPS.find((f) => f.match.includes(s.category))
-            if (!entry) return []
-            return [
-              {
-                key: `catalog-${s.id}`,
-                forMerchant: s.merchant,
-                name: entry.name,
-                healthNote: entry.healthNote,
-                qualityNote: entry.qualityNote,
-                annualSavings: null,
-                url: null,
-              },
-            ]
-          })
-
-  const swaps = aiSwaps.length > 0 ? aiSwaps : fallbackSwaps
-
-  const wellbeingEvents = snapshot.events
-    .filter((e) => e.kind === 'fitness' || e.kind === 'health')
-    .sort((a, b) => b.date.localeCompare(a.date))
 
   return (
     <div className="grid" style={{ maxWidth: 1100 }}>

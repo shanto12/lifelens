@@ -8,6 +8,49 @@ function json(status, body) {
   })
 }
 
+const PUBLIC_AI_DAILY_CAP = 200
+
+function isOwner(req) {
+  const code = process.env.LIFELENS_ACCESS_CODE || ''
+  if (!code) return false
+  return (req.headers.get('x-access-code') || '') === code
+}
+
+function supabaseEnv() {
+  const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
+  const key = process.env.SUPABASE_ANON_KEY || ''
+  const gate = process.env.SUPABASE_API_SECRET || ''
+  return url && key && gate ? { url, key, gate } : null
+}
+
+// Global daily AI-usage throttle for NON-OWNER callers. Fails open on any error
+// or when Supabase is unconfigured (local dev). Returns true when OVER the cap.
+async function overPublicAiCap() {
+  const env = supabaseEnv()
+  if (!env) return false // fail-open for local dev
+  try {
+    const res = await fetch(`${env.url}/rest/v1/rpc/bump_ai_usage_gated`, {
+      method: 'POST',
+      headers: {
+        apikey: env.key,
+        Authorization: `Bearer ${env.key}`,
+        'x-lifelens-key': env.gate,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      console.log('insights-brief: bump_ai_usage_gated failed', res.status)
+      return false // fail-open
+    }
+    const count = Number(await res.json())
+    return Number.isFinite(count) && count > PUBLIC_AI_DAILY_CAP
+  } catch (err) {
+    console.log('insights-brief: bump_ai_usage_gated error', err && err.message)
+    return false // fail-open
+  }
+}
+
 function sseResponse(run) {
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
@@ -188,6 +231,7 @@ export default async (req) => {
     return json(400, { error: 'Missing required field: summary (object)' })
   }
   const summary = body.summary
+  const owner = isOwner(req)
 
   const apiKey = process.env.GLM_API_KEY || ''
   const baseUrl = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')
@@ -199,27 +243,43 @@ export default async (req) => {
       return
     }
 
+    // Throttle non-owner callers against a shared global daily budget.
+    if (!owner && (await overPublicAiCap())) {
+      send('error', {
+        message: 'Daily AI budget reached — try the owner mode or come back tomorrow.',
+      })
+      return
+    }
+
     send('start', { provider: 'glm', model })
 
-    const { content, finishReason, usage } = await streamChat({
-      url: `${baseUrl}/chat/completions`,
-      apiKey,
-      body: {
-        model,
-        thinking: { type: 'disabled' },
-        max_tokens: 1400,
-        temperature: 0.4,
-        stream: true,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: `Here is today's financial summary as JSON:\n${JSON.stringify(summary).slice(0, 12000)}\n\nProduce the daily brief JSON now.`,
-          },
-        ],
-      },
-      onDelta: (text) => send('delta', { text }),
-    })
+    let content, finishReason, usage
+    try {
+      ;({ content, finishReason, usage } = await streamChat({
+        url: `${baseUrl}/chat/completions`,
+        apiKey,
+        body: {
+          model,
+          thinking: { type: 'disabled' },
+          max_tokens: owner ? 1400 : 900,
+          temperature: 0.4,
+          stream: true,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: `Here is today's financial summary as JSON:\n${JSON.stringify(summary).slice(0, 12000)}\n\nProduce the daily brief JSON now.`,
+            },
+          ],
+        },
+        onDelta: (text) => send('delta', { text }),
+      }))
+    } catch (err) {
+      // Do not leak upstream provider error bodies to the client.
+      console.log('insights-brief upstream failed:', err && err.message)
+      send('error', { message: 'The AI provider request failed — please try again shortly.' })
+      return
+    }
 
     if (!content.trim()) {
       send('error', {

@@ -58,6 +58,7 @@ describe('detectRecurring', () => {
 
   it('detects annual cadence across a leap year', () => {
     const subs = detectRecurring([
+      tx('2022-06-10', 'Amazon', 139),
       tx('2023-06-10', 'Amazon', 139),
       tx('2024-06-10', 'Amazon', 139),
     ])
@@ -65,6 +66,23 @@ describe('detectRecurring', () => {
     expect(subs[0].cadence).toBe('annual')
     expect(subs[0].nextRenewal).toBe('2025-06-10')
     expect(subs[0].annualCost).toBeCloseTo(139, 2)
+  })
+
+  it('does not classify a single yearly gap as an annual subscription', () => {
+    // Two charges a year apart look identical to two unrelated one-off purchases.
+    const subs = detectRecurring([
+      tx('2023-06-10', 'Amazon', 139),
+      tx('2024-06-10', 'Amazon', 139),
+    ])
+    expect(subs).toEqual([])
+  })
+
+  it('does not classify a single quarterly gap as a quarterly subscription', () => {
+    const subs = detectRecurring([
+      tx('2025-01-01', 'Domains Inc', 45),
+      tx('2025-04-01', 'Domains Inc', 45),
+    ])
+    expect(subs).toEqual([])
   })
 
   it('tolerates amount jitter within ±15% and gap jitter within ±20%', () => {
@@ -163,5 +181,37 @@ describe('detectRecurring', () => {
     ])
     expect(subs).toHaveLength(1)
     expect(subs[0].merchant).toBe('Spotify')
+  })
+
+  it('still detects monthly cadence when a receipt is duplicated on the same day', () => {
+    // A duplicated receipt produces a gap===0 pair that must not veto the cadence.
+    const subs = detectRecurring([
+      tx('2025-01-05', 'Netflix', 15.49),
+      tx('2025-01-05', 'Netflix', 15.49), // duplicate receipt, same day
+      tx('2025-02-05', 'Netflix', 15.49),
+      tx('2025-03-05', 'Netflix', 15.49),
+    ])
+    expect(subs).toHaveLength(1)
+    expect(subs[0].cadence).toBe('monthly')
+  })
+
+  it('detects each currency stream of a merchant independently', () => {
+    const subs = detectRecurring([
+      tx('2025-01-05', 'Netflix', 15.49, { currency: 'USD' }),
+      tx('2025-02-05', 'Netflix', 15.49, { currency: 'USD' }),
+      tx('2025-03-05', 'Netflix', 15.49, { currency: 'USD' }),
+      // A separate AUD stream at a different price must not pollute the USD cluster.
+      tx('2025-01-20', 'Netflix', 22.99, { currency: 'AUD' }),
+      tx('2025-02-20', 'Netflix', 22.99, { currency: 'AUD' }),
+      tx('2025-03-20', 'Netflix', 22.99, { currency: 'AUD' }),
+    ])
+    expect(subs).toHaveLength(2)
+    const usd = subs.find((s) => s.currency === 'USD')
+    const aud = subs.find((s) => s.currency === 'AUD')
+    expect(usd?.amount).toBe(15.49)
+    expect(aud?.amount).toBe(22.99)
+    // Evidence reflects the stream's own currency, not a hardcoded '$'.
+    expect(usd?.evidence).toContain('$15.49')
+    expect(aud?.evidence).toContain('$22.99')
   })
 })

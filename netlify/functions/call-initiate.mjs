@@ -91,16 +91,27 @@ export default async (req) => {
       return json(400, { error: 'to does not look like a valid phone number' })
     }
 
+    // Optional allowlist: if configured, a provided body.to must be in it.
+    const allowed = (process.env.TWILIO_ALLOWED_TO || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (to && allowed.length > 0 && !allowed.includes(to)) {
+      return json(403, { error: 'destination not allowed' })
+    }
+
     const sid = process.env.TWILIO_ACCOUNT_SID || ''
     const token = process.env.TWILIO_AUTH_TOKEN || ''
     const from = process.env.TWILIO_FROM_NUMBER || ''
     const ownerNumber = process.env.OWNER_PHONE_NUMBER || ''
     const owner = isOwner(req)
-    const twilioReady = !!(sid && token && from && (to || ownerNumber))
+    // On the LIVE Twilio path we always dial OWNER_PHONE_NUMBER — never a
+    // request-supplied destination. body.to is echoed only in the dry-run.
+    const twilioReady = !!(sid && token && from && ownerNumber)
 
     if (twilioReady && owner) {
       const params = new URLSearchParams()
-      params.set('To', to || ownerNumber)
+      params.set('To', ownerNumber)
       params.set('From', from)
       params.set('Twiml', `<Response><Say voice="Polly.Matthew">${escapeXml(script)}</Say></Response>`)
 
@@ -138,6 +149,7 @@ export default async (req) => {
     }
 
     // Dry-run path: no call placed.
+    const reason = !owner ? 'not_owner' : 'twilio_unconfigured'
     await logAction(owner, {
       kind: 'call_initiated',
       target,
@@ -148,8 +160,12 @@ export default async (req) => {
     return json(200, {
       ok: true,
       status: 'dry_run',
+      reason,
       wouldCall: to || 'owner number',
-      note: 'Twilio env not configured — no call placed',
+      note:
+        reason === 'not_owner'
+          ? 'Owner mode required to place a real call — no call placed'
+          : 'Twilio env not configured — no call placed',
     })
   } catch (err) {
     console.log('call-initiate error:', err && err.message)

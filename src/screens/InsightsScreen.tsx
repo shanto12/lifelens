@@ -1,12 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import type { ScreenProps } from '../lib/screen-props'
 import type { BriefResult, HealthSignalFlag, InsightType, SseStartEvent } from '../lib/types'
 import { streamSse } from '../lib/api'
 import { computeHealthFlags } from '../engine'
-import { fmtDate, fmtUsd, titleCase } from '../lib/format'
-
-const DAY_MS = 86_400_000
+import { daysBetween, fmtDate, fmtUsd, titleCase } from '../lib/format'
 
 const TYPE_CHIP: Record<InsightType, string> = {
   save_money: 'chip--accent',
@@ -28,10 +26,9 @@ type LedgerFilter = (typeof LEDGER_FILTERS)[number]
 
 function daysSince(iso: string | null, refIso: string): number | null {
   if (!iso) return null
-  const then = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).getTime()
-  const ref = new Date(refIso).getTime()
-  if (Number.isNaN(then) || Number.isNaN(ref)) return null
-  return Math.max(0, Math.floor((ref - then) / DAY_MS))
+  const days = daysBetween(iso, refIso)
+  if (Number.isNaN(days)) return null
+  return Math.max(0, days)
 }
 
 export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
@@ -99,9 +96,13 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
     )
   }
 
-  const ledger = snapshot.insights
-    .filter((i) => filter === 'all' || i.type === filter)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const ledger = useMemo(
+    () =>
+      snapshot.insights
+        .filter((i) => filter === 'all' || i.type === filter)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [snapshot.insights, filter],
+  )
 
   return (
     <div className="grid" style={{ maxWidth: 1100 }}>

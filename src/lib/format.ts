@@ -21,6 +21,21 @@ export function fmtMonth(yyyyMm: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
 }
 
+/** Midnight-UTC day index for a date-only or full ISO string (drops any time component). */
+function dayIndex(iso: string): number {
+  const d = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso)
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000
+}
+
+/**
+ * Calendar-day difference from `fromISO` to `toISO` (positive when `toISO` is later).
+ * Date-only math — no millisecond floor drift from time-of-day differences.
+ * Shared so Dashboard, Subscriptions, People, and Insights all count the same way.
+ */
+export function daysBetween(fromISO: string, toISO: string): number {
+  return dayIndex(toISO) - dayIndex(fromISO)
+}
+
 export function titleCase(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

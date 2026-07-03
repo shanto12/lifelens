@@ -32,6 +32,20 @@ const CADENCE_SHORT: Record<Cadence, string> = {
   unknown: '',
 }
 
+/** Format a non-USD amount with its own currency symbol (e.g. AUD 120 → "A$120"). */
+function formatNonUsd(currency: string, total: number): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(total)
+  } catch {
+    // Unknown/invalid currency code — fall back to a plain "CODE amount" label.
+    return `${currency} ${Math.round(total)}`
+  }
+}
+
 const KIND_ORDER: Account['kind'][] = [
   'checking',
   'credit_card',
@@ -75,8 +89,22 @@ export default function MoneyMapScreen({ snapshot, analytics }: ScreenProps) {
     [snapshot.transactions],
   )
 
+  const nonUsd = analytics.nonUsd
+
   return (
     <div style={{ display: 'grid', gap: 14 }}>
+      {nonUsd.length > 0 && (
+        <div className="card" style={{ display: 'grid', gap: 6 }}>
+          <div className="stat-label">Non-USD activity — shown separately</div>
+          <div className="muted" style={{ fontSize: 13 }}>
+            The USD totals above exclude charges in other currencies so nothing is mixed.{' '}
+            {nonUsd
+              .map((n) => `${formatNonUsd(n.currency, n.total)} across ${n.txCount} charge${n.txCount === 1 ? '' : 's'}`)
+              .join(' · ')}
+            .
+          </div>
+        </div>
+      )}
       <div className="card">
         <div className="card-title">Month-by-month spend</div>
         {months.length === 0 ? (

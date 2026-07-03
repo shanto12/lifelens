@@ -13,9 +13,9 @@ import {
   Unlock,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import type { OwnerError } from '../App'
 import type { ScreenId } from '../lib/screen-props'
 import type { SnapshotMode } from '../lib/types'
-import { setAccessCode } from '../lib/api'
 
 const NAV: { id: ScreenId; label: string; icon: ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -34,21 +34,50 @@ interface ShellProps {
   mode: SnapshotMode
   onUnlock: (code: string) => void
   onRefresh: () => void
+  refreshing: boolean
+  refreshFailed: boolean
+  ownerError: OwnerError | null
+  onClearOwnerError: () => void
+  hasAccessCode: boolean
   children: ReactNode
 }
 
-export default function Shell({ active, onNavigate, mode, onUnlock, onRefresh, children }: ShellProps) {
+export default function Shell({
+  active,
+  onNavigate,
+  mode,
+  onUnlock,
+  onRefresh,
+  refreshing,
+  refreshFailed,
+  ownerError,
+  onClearOwnerError,
+  hasAccessCode,
+  children,
+}: ShellProps) {
   const [showUnlock, setShowUnlock] = useState(false)
   const [code, setCode] = useState('')
 
   const submitCode = () => {
-    onUnlock(code.trim())
+    const trimmed = code.trim()
+    if (!trimmed) return
+    // Do NOT close the input here. On a wrong code, App flips `ownerError` and
+    // `mode` stays synthetic, so this branch keeps rendering with the inline
+    // error. On success, `mode` becomes 'owner' and the whole unlock branch is
+    // replaced by the Lock button — no explicit close needed.
+    onUnlock(trimmed)
+  }
+
+  const cancelUnlock = () => {
     setShowUnlock(false)
     setCode('')
+    onClearOwnerError()
   }
 
   const lockOut = () => {
-    setAccessCode('')
+    // Reset the input so a later synthetic session starts closed and clean.
+    setShowUnlock(false)
+    setCode('')
     onUnlock('')
   }
 
@@ -126,32 +155,69 @@ export default function Shell({ active, onNavigate, mode, onUnlock, onRefresh, c
               : 'Showing a synthetic demo persona. Unlock with your access code to see real data.'}
           </span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn--ghost" onClick={onRefresh} aria-label="Refresh data">
-              <RefreshCcw size={14} /> Refresh
+            {refreshFailed && (
+              <span className="chip chip--amber" role="status">
+                Refresh failed — showing last data
+              </span>
+            )}
+            <button
+              className="btn btn--ghost"
+              onClick={onRefresh}
+              disabled={refreshing}
+              aria-label="Refresh data"
+            >
+              <RefreshCcw size={14} className={refreshing ? 'pulsing' : undefined} aria-hidden="true" />{' '}
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
             {mode === 'owner' ? (
               <button className="btn" onClick={lockOut}>
                 <Lock size={14} /> Lock
               </button>
             ) : showUnlock ? (
-              <span style={{ display: 'inline-flex', gap: 6 }}>
-                <input
-                  type="password"
-                  placeholder="Access code"
-                  value={code}
-                  autoFocus
-                  onChange={(e) => setCode(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && submitCode()}
-                  aria-label="Access code"
-                  style={{ width: 150 }}
-                />
-                <button className="btn btn--primary" onClick={submitCode}>
-                  Unlock
-                </button>
+              <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                <span style={{ display: 'inline-flex', gap: 6 }}>
+                  <input
+                    type="password"
+                    placeholder="Access code"
+                    value={code}
+                    autoFocus
+                    onChange={(e) => {
+                      setCode(e.target.value)
+                      if (ownerError) onClearOwnerError()
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitCode()
+                      else if (e.key === 'Escape') cancelUnlock()
+                    }}
+                    aria-label="Access code"
+                    aria-invalid={ownerError !== null}
+                    style={{ width: 150 }}
+                  />
+                  <button className="btn btn--primary" onClick={submitCode} disabled={refreshing}>
+                    Unlock
+                  </button>
+                  <button className="btn btn--ghost" onClick={cancelUnlock} aria-label="Cancel unlock">
+                    Cancel
+                  </button>
+                </span>
+                {ownerError && (
+                  <span className="neg" role="alert" style={{ fontSize: 11 }}>
+                    {ownerError === 'bad_code'
+                      ? 'Invalid access code'
+                      : 'Server unavailable — try again'}
+                  </span>
+                )}
               </span>
             ) : (
-              <button className="btn" onClick={() => setShowUnlock(true)} data-testid="owner-unlock">
-                <Unlock size={14} /> Owner unlock
+              <button
+                className="btn"
+                onClick={() => {
+                  onClearOwnerError()
+                  setShowUnlock(true)
+                }}
+                data-testid="owner-unlock"
+              >
+                <Unlock size={14} /> {hasAccessCode ? 'Re-enter code' : 'Owner unlock'}
               </button>
             )}
           </div>

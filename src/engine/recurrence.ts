@@ -95,6 +95,25 @@ function median(nums: number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
+/** Symbol/prefix for the evidence string; falls back to a currency-tagged amount. */
+function currencyPrefix(currency: string): string {
+  switch (currency.toUpperCase()) {
+    case 'USD':
+    case 'CAD':
+    case 'AUD':
+    case 'NZD':
+      return '$'
+    case 'EUR':
+      return '€'
+    case 'GBP':
+      return '£'
+    case 'JPY':
+      return '¥'
+    default:
+      return `${currency.toUpperCase()} `
+  }
+}
+
 function nextRenewalFor(lastCharge: string, cadence: Cadence): string | null {
   switch (cadence) {
     case 'weekly':
@@ -126,9 +145,18 @@ function detectForMerchant(merchant: string, txs: Transaction[], today: string):
   // Keep only charges with similar amounts (±15 % of the merchant median).
   const med = median(charges.map((c) => c.amount))
   const tolerance = Math.abs(med) * AMOUNT_TOLERANCE
-  const kept = charges
+  const similar = charges
     .filter((c) => Math.abs(c.amount - med) <= tolerance)
     .sort((a, b) => a.date.localeCompare(b.date))
+
+  // Collapse consecutive same-date charges (e.g. a duplicated receipt) so gap===0
+  // pairs don't dilute the cadence vote.
+  const kept: Charge[] = []
+  for (const c of similar) {
+    const prev = kept[kept.length - 1]
+    if (prev && prev.date === c.date) continue
+    kept.push(c)
+  }
   if (kept.length < 2) return null
 
   // Classify each gap to the closest canonical period within ±20 % jitter.
@@ -140,7 +168,7 @@ function detectForMerchant(merchant: string, txs: Transaction[], today: string):
     let bestErr = Number.POSITIVE_INFINITY
     for (const p of PERIODS) {
       const err = Math.abs(gap - p.days) / p.days
-      if (err <= GAP_JITTER && err < bestErr) {
+      if (err < GAP_JITTER && err < bestErr) {
         best = p
         bestErr = err
       }
@@ -166,6 +194,10 @@ function detectForMerchant(merchant: string, txs: Transaction[], today: string):
   const gapCount = kept.length - 1
   if (!winner || winnerVotes * 2 < gapCount) return null
 
+  // Long cadences off a single gap are indistinguishable from pay-per-use, so
+  // require at least two classified gaps for quarterly and annual detections.
+  if ((winner.cadence === 'quarterly' || winner.cadence === 'annual') && winnerVotes < 2) return null
+
   const last = kept[kept.length - 1]
   const amount = round2(last.amount)
   const annualCost = round2(amount * winner.multiplier)
@@ -173,11 +205,14 @@ function detectForMerchant(merchant: string, txs: Transaction[], today: string):
   // Confidence: more observations + tighter spacing = higher (0-1).
   const obsScore = Math.min(1, (kept.length - 1) / 4)
   const spacingScore = 1 - normalizedErrors.reduce((s, e) => s + e, 0) / normalizedErrors.length
-  const confidence = round2(Math.min(0.99, 0.3 + 0.35 * obsScore + 0.35 * spacingScore))
+  let confidence = round2(Math.min(0.99, 0.3 + 0.35 * obsScore + 0.35 * spacingScore))
+  // A single classified gap is weak evidence — cap confidence so the UI can rank it low.
+  if (winnerVotes < 2) confidence = Math.min(confidence, 0.5)
 
   const elapsed = daysBetween(last.date, today) ?? 0
   const status: SubscriptionStatus = elapsed > winner.days * STALE_PERIODS ? 'unknown' : 'active'
 
+  const money = `${currencyPrefix(last.currency)}${amount.toFixed(2)}`
   return {
     id: 0,
     merchant,
@@ -191,7 +226,7 @@ function detectForMerchant(merchant: string, txs: Transaction[], today: string):
     status,
     annualCost,
     confidence,
-    evidence: `${kept.length} charges of ~$${amount.toFixed(2)} every ~${winner.days} days`,
+    evidence: `${kept.length} charges of ~${money} every ~${winner.days} days`,
   }
 }
 
@@ -214,9 +249,11 @@ export function detectRecurring(transactions: Transaction[]): Subscription[] {
     if (d > today) today = d
   }
 
+  // Group by merchant *and* currency so a merchant's USD and non-USD streams are
+  // detected independently — mixing currencies would break the amount cluster.
   const groups = new Map<string, Transaction[]>()
   for (const t of usable) {
-    const key = t.merchant.trim().toLowerCase()
+    const key = `${t.merchant.trim().toLowerCase()}::${t.currency || 'USD'}`
     const existing = groups.get(key)
     if (existing) existing.push(t)
     else groups.set(key, [t])

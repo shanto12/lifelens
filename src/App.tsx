@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Shell from './components/Shell'
 import type { ScreenId, ScreenProps } from './lib/screen-props'
 import type { HealthStatus, Snapshot } from './lib/types'
-import { fetchHealth, fetchSnapshot, setAccessCode } from './lib/api'
+import { fetchHealth, fetchSnapshot, getAccessCode, setAccessCode } from './lib/api'
 import { computeSpendAnalytics } from './engine'
 import { syntheticSnapshot } from './data/persona'
 import DashboardScreen from './screens/DashboardScreen'
@@ -25,41 +25,93 @@ const SCREENS: Record<ScreenId, (props: ScreenProps) => React.ReactElement> = {
   guide: DemoGuideScreen,
 }
 
+export type OwnerError = 'bad_code' | 'server'
+
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>('dashboard')
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [loading, setLoading] = useState(true)
-
-  const load = useCallback(async () => {
-    const [snap, hl] = await Promise.all([fetchSnapshot(), fetchHealth()])
-    // If the API layer is unreachable (e.g. plain `vite` dev without functions),
-    // fall back to the bundled synthetic persona so the UI stays explorable.
-    setSnapshot(snap ?? syntheticSnapshot)
-    setHealth(hl)
-    setLoading(false)
-  }, [])
-
+  const [refreshing, setRefreshing] = useState(false)
+  const [ownerError, setOwnerError] = useState<OwnerError | null>(null)
+  const [refreshFailed, setRefreshFailed] = useState(false)
+  // Guards against overlapping loads clobbering each other's results.
+  const inFlight = useRef(false)
+  // Mirror of the latest snapshot so load() can branch on prior data without
+  // nesting a setState inside a state updater (which StrictMode may double-run).
+  const snapshotRef = useRef<Snapshot | null>(null)
   useEffect(() => {
-    let active = true
-    void Promise.all([fetchSnapshot(), fetchHealth()]).then(([snap, hl]) => {
-      if (!active) return
-      setSnapshot(snap ?? syntheticSnapshot)
+    snapshotRef.current = snapshot
+  }, [snapshot])
+
+  /**
+   * Fetch snapshot + health and reconcile state.
+   * @param codeSubmitted true when a fresh access code was just entered (so a
+   *   `bundled` result means the code was wrong, not merely absent).
+   */
+  const load = useCallback(async (codeSubmitted = false) => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setRefreshing(true)
+    try {
+      const [result, hl] = await Promise.all([fetchSnapshot(), fetchHealth()])
       setHealth(hl)
+      if (result.kind === 'owner') {
+        setSnapshot(result.snapshot)
+        setOwnerError(null)
+        setRefreshFailed(false)
+      } else if (result.kind === 'bundled') {
+        // A submitted code that resolves to bundled means the code was rejected.
+        setOwnerError(codeSubmitted ? 'bad_code' : null)
+        setRefreshFailed(false)
+        // First load with no prior data → show the bundled synthetic persona.
+        // Never demote an already-unlocked owner snapshot back to synthetic.
+        if (!snapshotRef.current) setSnapshot(syntheticSnapshot)
+      } else {
+        // Network / server error.
+        setOwnerError(codeSubmitted ? 'server' : null)
+        if (snapshotRef.current) {
+          // Keep the data we already have; just flag the failed refresh.
+          setRefreshFailed(true)
+        } else {
+          // Cold first load with nothing to show → bundled synthetic persona.
+          setSnapshot(syntheticSnapshot)
+        }
+      }
+    } finally {
+      inFlight.current = false
+      setRefreshing(false)
       setLoading(false)
-    })
-    return () => {
-      active = false
     }
   }, [])
 
+  const refresh = useCallback(() => {
+    void load(false)
+  }, [load])
+
+  useEffect(() => {
+    // `load` is stable (useCallback with empty deps), so this runs once on mount.
+    void load(false)
+  }, [load])
+
   const handleUnlock = useCallback(
     (code: string) => {
-      setAccessCode(code)
-      void load()
+      if (code) {
+        setAccessCode(code)
+        void load(true)
+      } else {
+        // Explicit lock-out: clear the code and reload as the bundled persona.
+        setAccessCode('')
+        setSnapshot(syntheticSnapshot)
+        setOwnerError(null)
+        setRefreshFailed(false)
+        void load(false)
+      }
     },
     [load],
   )
+
+  const clearOwnerError = useCallback(() => setOwnerError(null), [])
 
   const analytics = useMemo(
     () => computeSpendAnalytics(snapshot ?? syntheticSnapshot),
@@ -83,13 +135,18 @@ export default function App() {
       onNavigate={setScreen}
       mode={snap.mode}
       onUnlock={handleUnlock}
-      onRefresh={load}
+      onRefresh={refresh}
+      refreshing={refreshing}
+      refreshFailed={refreshFailed}
+      ownerError={ownerError}
+      onClearOwnerError={clearOwnerError}
+      hasAccessCode={getAccessCode().length > 0}
     >
       <Active
         snapshot={snap}
         analytics={analytics}
         health={health}
-        refresh={load}
+        refresh={refresh}
         onNavigate={setScreen}
       />
     </Shell>

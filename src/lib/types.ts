@@ -255,13 +255,22 @@ export interface MonthlySpend {
   total: number
 }
 
+export interface NonUsdSpend {
+  currency: string
+  total: number
+  txCount: number
+}
+
 export interface SpendAnalytics {
+  /** USD-only aggregate — non-USD charges are segregated into `nonUsd` so totals never mix currencies. */
   totalTracked: number
   byCategory: CategorySpend[]
   byMerchant: MerchantSpend[]
   byMonth: MonthlySpend[]
   subscriptionAnnualTotal: number
   recurringBillsAnnualTotal: number
+  /** Charges whose currency is neither USD nor blank, grouped by currency. Empty when all data is USD. */
+  nonUsd: NonUsdSpend[]
 }
 
 export interface HealthSignalFlag {

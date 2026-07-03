@@ -99,11 +99,30 @@ describe('findCatalogAlternatives', () => {
   })
 
   it('can return several options for one merchant (Spotify tiers)', () => {
-    const alts = findCatalogAlternatives(sub({ merchant: 'Spotify', annualCost: 143.88, amount: 11.99 }))
+    // A $20.99/mo plan (251.88/yr) clears both Duo (203.88/yr) and Free (0/yr).
+    const alts = findCatalogAlternatives(sub({ merchant: 'Spotify', annualCost: 251.88, amount: 20.99 }))
     expect(alts.length).toBeGreaterThanOrEqual(2)
     for (const alt of alts) {
       expect(alt.subscriptionId).toBe(7)
       expect(alt.source).toBe('catalog')
     }
+  })
+
+  it('skips a pricier alternative but keeps a cheaper one for the same merchant', () => {
+    // $11.99/mo Spotify (143.88/yr): Duo at 16.99/mo (203.88/yr) is MORE expensive → dropped.
+    // Spotify Free (0/yr) still saves the full amount → kept.
+    const alts = findCatalogAlternatives(sub({ merchant: 'Spotify', annualCost: 143.88, amount: 11.99 }))
+    expect(alts.some((a) => a.name.includes('Duo'))).toBe(false)
+    expect(alts.some((a) => a.name.includes('Free'))).toBe(true)
+    for (const alt of alts) {
+      expect(alt.annualSavings === null || alt.annualSavings > 0).toBe(true)
+    }
+  })
+
+  it('keeps the pricier Duo option when the current plan is expensive enough', () => {
+    // $16.99/mo Spotify (203.88/yr): Duo at 16.99/mo (203.88/yr) ties → 0 savings → dropped.
+    // A $17.99/mo plan (215.88/yr) clears Duo's 203.88 → positive savings → kept.
+    const alts = findCatalogAlternatives(sub({ merchant: 'Spotify', annualCost: 215.88, amount: 17.99 }))
+    expect(alts.some((a) => a.name.includes('Duo'))).toBe(true)
   })
 })

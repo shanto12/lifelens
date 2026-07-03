@@ -22,6 +22,36 @@ function supabaseEnv() {
   return url && key && gate ? { url, key, gate } : null
 }
 
+const PUBLIC_AI_DAILY_CAP = 200
+
+// Global daily AI-usage throttle for NON-OWNER callers. Fails open on any error
+// or when Supabase is unconfigured (local dev). Returns true when OVER the cap.
+async function overPublicAiCap() {
+  const env = supabaseEnv()
+  if (!env) return false // fail-open for local dev
+  try {
+    const res = await fetch(`${env.url}/rest/v1/rpc/bump_ai_usage_gated`, {
+      method: 'POST',
+      headers: {
+        apikey: env.key,
+        Authorization: `Bearer ${env.key}`,
+        'x-lifelens-key': env.gate,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      console.log('call-script: bump_ai_usage_gated failed', res.status)
+      return false // fail-open
+    }
+    const count = Number(await res.json())
+    return Number.isFinite(count) && count > PUBLIC_AI_DAILY_CAP
+  } catch (err) {
+    console.log('call-script: bump_ai_usage_gated error', err && err.message)
+    return false // fail-open
+  }
+}
+
 async function sbInsert(env, table, row) {
   const res = await fetch(`${env.url}/rest/v1/${table}`, {
     method: 'POST',
@@ -216,8 +246,10 @@ export default async (req) => {
   const target = body.target.trim().slice(0, 160)
   const goal = body.goal.trim().slice(0, 400)
   const context = typeof body.context === 'string' ? body.context.slice(0, 4000) : ''
-  const wantGrok = body.provider === 'grok'
   const owner = isOwner(req)
+  // Grok (xAI) is owner-only — force GLM for non-owner callers so the xAI key
+  // is never spent on public traffic.
+  const wantGrok = body.provider === 'grok' && owner
 
   const glmKey = process.env.GLM_API_KEY || ''
   const glmBase = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')
@@ -230,6 +262,14 @@ export default async (req) => {
   return sseResponse(async (send) => {
     if (!useGrok && !glmKey) {
       send('error', { message: 'No LLM provider configured — call script unavailable' })
+      return
+    }
+
+    // Throttle non-owner callers against a shared global daily budget.
+    if (!owner && (await overPublicAiCap())) {
+      send('error', {
+        message: 'Daily AI budget reached — try the owner mode or come back tomorrow.',
+      })
       return
     }
 
@@ -273,7 +313,7 @@ export default async (req) => {
       : {
           model,
           thinking: { type: 'disabled' },
-          max_tokens: 1400,
+          max_tokens: owner ? 1400 : 900,
           temperature: 0.4,
           stream: true,
           messages: [
@@ -282,12 +322,20 @@ export default async (req) => {
           ],
         }
 
-    const { content, finishReason, usage } = await streamChat({
-      url: useGrok ? 'https://api.x.ai/v1/chat/completions' : `${glmBase}/chat/completions`,
-      apiKey: useGrok ? xaiKey : glmKey,
-      body: requestBody,
-      onDelta: (text) => send('delta', { text }),
-    })
+    let content, finishReason, usage
+    try {
+      ;({ content, finishReason, usage } = await streamChat({
+        url: useGrok ? 'https://api.x.ai/v1/chat/completions' : `${glmBase}/chat/completions`,
+        apiKey: useGrok ? xaiKey : glmKey,
+        body: requestBody,
+        onDelta: (text) => send('delta', { text }),
+      }))
+    } catch (err) {
+      // Do not leak upstream provider error bodies to the client.
+      console.log('call-script upstream failed:', err && err.message)
+      send('error', { message: 'The AI provider request failed — please try again shortly.' })
+      return
+    }
 
     if (!content.trim()) {
       send('error', {

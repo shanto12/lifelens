@@ -1,17 +1,15 @@
 import { BellRing, Users } from 'lucide-react'
 import type { ScreenProps } from '../lib/screen-props'
 import type { Person, Relationship } from '../lib/types'
-import { fmtDate, titleCase } from '../lib/format'
+import { daysBetween, fmtDate, titleCase } from '../lib/format'
 
-const DAY_MS = 86_400_000
 const STALE_DAYS = 30
 
 function daysSince(iso: string | null, refIso: string): number | null {
   if (!iso) return null
-  const then = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso).getTime()
-  const ref = new Date(refIso).getTime()
-  if (Number.isNaN(then) || Number.isNaN(ref)) return null
-  return Math.max(0, Math.floor((ref - then) / DAY_MS))
+  const days = daysBetween(iso, refIso)
+  if (Number.isNaN(days)) return null
+  return Math.max(0, days)
 }
 
 function ClosenessBar({ value, showValue = true }: { value: number; showValue?: boolean }) {

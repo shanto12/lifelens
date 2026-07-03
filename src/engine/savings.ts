@@ -197,6 +197,9 @@ export function findCatalogAlternatives(sub: Subscription): Alternative[] {
     const altAnnual = annualPrice(entry)
     const annualSavings =
       sub.annualCost === null || altAnnual === null ? null : round2(sub.annualCost - altAnnual)
+    // Skip alternatives that cost more than the current plan. Keep null — usage-priced
+    // entries are legitimately unpriceable, not "no savings".
+    if (annualSavings !== null && annualSavings <= 0) continue
     out.push({
       id: 0,
       subscriptionId: sub.id,

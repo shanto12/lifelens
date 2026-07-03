@@ -17,6 +17,12 @@ function supabaseEnv() {
   return url && key && gate ? { url, key, gate } : null
 }
 
+function isOwner(req) {
+  const code = process.env.LIFELENS_ACCESS_CODE || ''
+  if (!code) return false
+  return (req.headers.get('x-access-code') || '') === code
+}
+
 async function sbSelect(env, pathAndQuery) {
   const res = await fetch(`${env.url}/rest/v1/${pathAndQuery}`, {
     headers: { apikey: env.key, Authorization: `Bearer ${env.key}`, 'x-lifelens-key': env.gate },
@@ -51,19 +57,6 @@ function num(v) {
   return null
 }
 
-// Insert an insight unless an open one with the identical title already exists.
-async function insertInsightDeduped(env, insight) {
-  const q = `insights?select=id&title=eq.${encodeURIComponent(insight.title)}&status=eq.new&limit=1`
-  const existing = await sbSelect(env, q)
-  if (Array.isArray(existing) && existing.length > 0) {
-    console.log('ingest-run: dedupe skip:', insight.title)
-    return false
-  }
-  await sbInsert(env, 'insights', { ...insight, status: 'new' })
-  console.log('ingest-run: inserted insight:', insight.title)
-  return true
-}
-
 export default async (req) => {
   const startedAt = new Date().toISOString()
   console.log('ingest-run: start', startedAt)
@@ -71,6 +64,24 @@ export default async (req) => {
   try {
     if (req.method !== 'POST' && req.method !== 'GET') {
       return json(405, { error: 'Method not allowed' })
+    }
+
+    // Read the body ONCE (scheduled invocations POST JSON with a next_run field).
+    let parsedBody = null
+    try {
+      const raw = await req.text()
+      parsedBody = raw ? JSON.parse(raw) : null
+    } catch {
+      parsedBody = null
+    }
+    const isScheduled = !!(parsedBody && typeof parsedBody === 'object' && parsedBody.next_run)
+
+    // Gate HTTP invocations: allow only scheduled runs, the owner, or the shared
+    // ingest secret. Everyone else is forbidden.
+    const secret = process.env.SUPABASE_API_SECRET || ''
+    const hasSecret = !!secret && (req.headers.get('x-ingest-secret') || '') === secret
+    if (!isScheduled && !isOwner(req) && !hasSecret) {
+      return json(403, { error: 'forbidden' })
     }
 
     const env = supabaseEnv()
@@ -82,18 +93,43 @@ export default async (req) => {
     const now = new Date()
     const cutoff120 = new Date(now.getTime() - 120 * 24 * 3600 * 1000).toISOString().slice(0, 10)
 
-    const [subscriptions, transactions, accounts] = await Promise.all([
+    const [subscriptions, transactions, accounts, existingInsights] = await Promise.all([
       sbSelect(env, 'subscriptions?select=*'),
-      sbSelect(env, `transactions?select=*&date=gte.${cutoff120}&order=date.desc&limit=2000`),
+      sbSelect(env, `transactions?select=date,amount,category,kind&date=gte.${cutoff120}&order=date.desc&limit=2000`),
       sbSelect(env, 'accounts?select=*'),
+      sbSelect(env, 'insights?select=title,data'),
     ])
     const subs = Array.isArray(subscriptions) ? subscriptions : []
     const txns = Array.isArray(transactions) ? transactions : []
     const accts = Array.isArray(accounts) ? accounts : []
     console.log(`ingest-run: loaded ${subs.length} subs, ${txns.length} txns, ${accts.length} accounts`)
 
-    const considered = subs.length + txns.length + accts.length
-    let inserted = 0
+    // Build dedupe indexes ONCE across ANY status (dropped &status=eq.new so
+    // dismissed/done insights are never resurrected). Prefer the stable data.key;
+    // fall back to title for legacy rows without a key.
+    const existing = Array.isArray(existingInsights) ? existingInsights : []
+    const existingKeys = new Set(
+      existing.map((r) => r && r.data && r.data.key).filter(Boolean),
+    )
+    const existingTitles = new Set(existing.map((r) => r && r.title).filter(Boolean))
+
+    const newRows = []
+    const seenKeys = new Set()
+    // Queue an insight unless its stable key (or, for legacy rows, title) exists.
+    const queue = (insight) => {
+      const key = insight.data && insight.data.key
+      if (key && (existingKeys.has(key) || seenKeys.has(key))) {
+        console.log('ingest-run: dedupe skip (key):', key)
+        return
+      }
+      if (existingTitles.has(insight.title)) {
+        console.log('ingest-run: dedupe skip (title):', insight.title)
+        return
+      }
+      if (key) seenKeys.add(key)
+      newRows.push({ ...insight, status: 'new' })
+    }
+
     const todayStr = now.toISOString().slice(0, 10)
 
     // (a) renewals due within 14 days → 'alert' insights
@@ -104,18 +140,19 @@ export default async (req) => {
       if (Number.isNaN(renewal.getTime())) continue
       if (renewal < new Date(todayStr) || renewal > in14) continue
       const amount = num(s.amount)
-      const title = `Renewal due: ${s.merchant} on ${String(s.next_renewal).slice(0, 10)}`
-      const body = `${s.merchant}${s.plan ? ` (${s.plan})` : ''} renews on ${String(s.next_renewal).slice(0, 10)}${
+      const renewalDate = String(s.next_renewal).slice(0, 10)
+      const title = `Renewal due: ${s.merchant} on ${renewalDate}`
+      const body = `${s.merchant}${s.plan ? ` (${s.plan})` : ''} renews on ${renewalDate}${
         amount != null ? ` for $${round2(amount)}` : ''
       }. Decide before it charges: keep, downgrade, or cancel.`
-      const ok = await insertInsightDeduped(env, {
+      queue({
         type: 'alert',
         title,
         body,
         impact_usd: amount,
         impact_kind: amount != null ? 'one_time' : null,
+        data: { key: `renewal:${s.merchant}:${renewalDate}` },
       })
-      if (ok) inserted++
     }
 
     // (b) current-month category spend vs prior month: >40% jump AND >$100 increase
@@ -143,14 +180,14 @@ export default async (req) => {
       const body = `You have spent $${round2(cur)} on ${cat} in ${curMonth} vs $${round2(prev)} in ${priorMonth} — a $${round2(
         cur - prev,
       )} increase. Review the largest charges in this category.`
-      const ok = await insertInsightDeduped(env, {
+      queue({
         type: 'save_money',
         title,
         body,
         impact_usd: round2(cur - prev),
         impact_kind: 'one_time',
+        data: { key: `spend_jump:${cat}:${curMonth.replace('-', '')}` },
       })
-      if (ok) inserted++
     }
 
     // (c) subscription annual-cost snapshot → one 'wealth' insight per run day
@@ -163,14 +200,14 @@ export default async (req) => {
       const body = `You have ${activeSubs.length} active subscriptions costing about $${annualTotal} per year ($${round2(
         annualTotal / 12,
       )}/month). That figure invested at 7% would be worth roughly $${round2(annualTotal * 5.75)} in 5 years.`
-      const ok = await insertInsightDeduped(env, {
+      queue({
         type: 'wealth',
         title,
         body,
         impact_usd: annualTotal,
         impact_kind: null,
+        data: { key: `wealth:${todayStr.replace(/-/g, '')}` },
       })
-      if (ok) inserted++
     }
 
     // (d) >=3 active subscriptions in one category → consolidation opportunity
@@ -184,23 +221,35 @@ export default async (req) => {
       const group = byCat[cat]
       if (group.length < 3) continue
       const costs = group.map((s) => num(s.annual_cost)).filter((c) => c != null && c > 0)
-      const minCost = costs.length ? round2(Math.min(...costs)) : null
+      // Total annual cost of the category — informational, not a savings figure
+      // (impact_kind null): we cannot promise elimination of any given service.
+      const totalCost = costs.length ? round2(costs.reduce((a, b) => a + b, 0)) : null
       const names = group.map((s) => s.merchant).filter(Boolean).slice(0, 5).join(' + ')
       const title = `Consolidation opportunity: ${group.length} ${cat} subscriptions`
-      const body = `You are paying for ${group.length} ${cat} services at once (${names}). Cutting or rotating just one would save${
-        minCost != null ? ` at least $${minCost}/yr` : ' real money every year'
-      }.`
-      const ok = await insertInsightDeduped(env, {
+      const body = `You are paying for ${group.length} ${cat} services at once (${names})${
+        totalCost != null ? ` — about $${totalCost}/yr combined` : ''
+      }. Cutting or rotating just one would save real money every year.`
+      queue({
         type: 'save_money',
         title,
         body,
-        impact_usd: minCost,
-        impact_kind: minCost != null ? 'annual_savings' : null,
+        impact_usd: totalCost,
+        impact_kind: null,
+        data: { key: `consolidation:${cat}` },
       })
-      if (ok) inserted++
     }
 
-    // record the run
+    // Insert all new insight rows in ONE call (PostgREST accepts an array body).
+    let inserted = 0
+    if (newRows.length > 0) {
+      await sbInsert(env, 'insights', newRows)
+      inserted = newRows.length
+      console.log(`ingest-run: inserted ${inserted} insights`)
+    }
+
+    const considered = subs.length + txns.length + accts.length
+
+    // record the run (considered is kept in internal run stats, not the response)
     try {
       await sbInsert(env, 'runs', {
         started_at: startedAt,
@@ -214,7 +263,7 @@ export default async (req) => {
     }
 
     console.log(`ingest-run: done — inserted ${inserted}, considered ${considered}`)
-    return json(200, { ok: true, inserted, considered })
+    return json(200, { ok: true })
   } catch (err) {
     console.log('ingest-run: error:', err && err.message)
     const env = supabaseEnv()

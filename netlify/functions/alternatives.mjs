@@ -8,6 +8,60 @@ function json(status, body) {
   })
 }
 
+const PUBLIC_AI_DAILY_CAP = 200
+
+function isOwner(req) {
+  const code = process.env.LIFELENS_ACCESS_CODE || ''
+  if (!code) return false
+  return (req.headers.get('x-access-code') || '') === code
+}
+
+function supabaseEnv() {
+  const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
+  const key = process.env.SUPABASE_ANON_KEY || ''
+  const gate = process.env.SUPABASE_API_SECRET || ''
+  return url && key && gate ? { url, key, gate } : null
+}
+
+// Global daily AI-usage throttle for NON-OWNER callers. Fails open on any error
+// or when Supabase is unconfigured (local dev). Returns true when OVER the cap.
+async function overPublicAiCap() {
+  const env = supabaseEnv()
+  if (!env) return false // fail-open for local dev
+  try {
+    const res = await fetch(`${env.url}/rest/v1/rpc/bump_ai_usage_gated`, {
+      method: 'POST',
+      headers: {
+        apikey: env.key,
+        Authorization: `Bearer ${env.key}`,
+        'x-lifelens-key': env.gate,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      console.log('alternatives: bump_ai_usage_gated failed', res.status)
+      return false // fail-open
+    }
+    const count = Number(await res.json())
+    return Number.isFinite(count) && count > PUBLIC_AI_DAILY_CAP
+  } catch (err) {
+    console.log('alternatives: bump_ai_usage_gated error', err && err.message)
+    return false // fail-open
+  }
+}
+
+// Keep a model-supplied url only when it parses AND is http(s). Otherwise null.
+function safeUrl(v) {
+  if (typeof v !== 'string' || !v) return null
+  try {
+    const u = new URL(v)
+    return u.protocol === 'https:' || u.protocol === 'http:' ? v : null
+  } catch {
+    return null
+  }
+}
+
 function sseResponse(run) {
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
@@ -156,7 +210,7 @@ function coerceAlternatives(obj, merchant, annualCost) {
       annualSavings: numOrNull(s.annualSavings),
       qualityNote: typeof s.qualityNote === 'string' ? s.qualityNote : '',
       healthNote: typeof s.healthNote === 'string' ? s.healthNote : null,
-      url: typeof s.url === 'string' ? s.url : null,
+      url: safeUrl(s.url),
     }))
   if (suggestions.length === 0) return null
   return {
@@ -343,6 +397,7 @@ export default async (req) => {
   const cadence = coerceCadence(body.cadence)
   const annualCost = numOrNull(body.annualCost)
   const category = typeof body.category === 'string' ? body.category.slice(0, 40) : 'other'
+  const owner = isOwner(req)
 
   const apiKey = process.env.GLM_API_KEY || ''
   const baseUrl = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')
@@ -352,6 +407,16 @@ export default async (req) => {
     if (!apiKey) {
       send('start', { provider: 'catalog', model: 'deterministic' })
       send('result', catalogFallback({ merchant, annualCost }))
+      return
+    }
+
+    // Throttle non-owner callers: over the shared daily budget, serve the
+    // deterministic catalog fallback instead of spending on live AI search.
+    if (!owner && (await overPublicAiCap())) {
+      send('start', { provider: 'catalog', model: 'deterministic' })
+      const fallback = catalogFallback({ merchant, annualCost })
+      fallback.recommendation = `${fallback.recommendation} Daily AI budget reached — showing catalog suggestions.`
+      send('result', fallback)
       return
     }
 
@@ -389,7 +454,7 @@ export default async (req) => {
         body: {
           model,
           thinking: { type: 'disabled' },
-          max_tokens: 1500,
+          max_tokens: owner ? 1500 : 900,
           temperature: 0.4,
           stream: true,
           messages: [

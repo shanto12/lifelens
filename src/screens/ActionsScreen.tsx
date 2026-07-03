@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, PhoneCall, ShieldCheck, Sparkles } from 'lucide-react'
 import type { ScreenProps } from '../lib/screen-props'
 import type { ActionItem, CallScriptResult, SseStartEvent } from '../lib/types'
@@ -30,6 +30,7 @@ const STATUS_CHIP: Record<ActionItem['status'], string> = {
 
 interface CallOutcome {
   status: 'dry_run' | 'initiated' | 'failed'
+  reason?: 'not_owner' | 'twilio_unconfigured'
   sid?: string
 }
 
@@ -106,9 +107,13 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
         setCallOutcome({ status: 'failed' })
         return
       }
-      const data = (await res.json()) as { status?: string; sid?: string }
+      const data = (await res.json()) as {
+        status?: string
+        sid?: string
+        reason?: 'not_owner' | 'twilio_unconfigured'
+      }
       if (data.status === 'dry_run' || data.status === 'initiated') {
-        setCallOutcome({ status: data.status, sid: data.sid })
+        setCallOutcome({ status: data.status, reason: data.reason, sid: data.sid })
       } else {
         setCallOutcome({ status: 'failed' })
       }
@@ -119,7 +124,13 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
     }
   }
 
-  const audit = [...snapshot.actions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const audit = useMemo(
+    () =>
+      [...snapshot.actions]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .map((a) => ({ item: a, payload: JSON.stringify(a.payload) })),
+    [snapshot.actions],
+  )
 
   return (
     <div className="grid" style={{ maxWidth: 1100 }}>
@@ -307,7 +318,9 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
               </button>
               {callOutcome?.status === 'dry_run' && (
                 <span className="chip chip--amber" role="status">
-                  DRY RUN — Twilio not configured
+                  {callOutcome.reason === 'not_owner'
+                    ? 'DRY RUN — demo mode never places real calls'
+                    : 'DRY RUN — Twilio not configured'}
                 </span>
               )}
               {callOutcome?.status === 'initiated' && (
@@ -345,8 +358,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
                 </tr>
               </thead>
               <tbody>
-                {audit.map((a) => {
-                  const payload = JSON.stringify(a.payload)
+                {audit.map(({ item: a, payload }) => {
                   return (
                     <tr key={a.id}>
                       <td className="muted" style={{ whiteSpace: 'nowrap' }}>

@@ -5,11 +5,17 @@ import type {
   CategorySpend,
   MerchantSpend,
   MonthlySpend,
+  NonUsdSpend,
   Snapshot,
   SpendAnalytics,
   SpendCategory,
 } from '../lib/types'
 import { cadenceMultiplier } from './recurrence'
+
+/** A currency counts toward USD aggregates when it is USD, blank, or unset. */
+function isUsd(currency: string | null | undefined): boolean {
+  return !currency || currency.toUpperCase() === 'USD'
+}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -75,15 +81,28 @@ function monthlyBuckets(charges: Charge[]): MonthlySpend[] {
  */
 export function computeSpendAnalytics(snapshot: Snapshot): SpendAnalytics {
   const charges: Charge[] = []
+  const nonUsdMap = new Map<string, { currency: string; total: number; txCount: number }>()
   for (const t of snapshot.transactions) {
     if (t.kind === 'refund' || t.amount === null) continue
-    charges.push({
-      date: t.date.slice(0, 10),
-      merchant: t.merchant,
-      amount: t.amount,
-      category: t.category,
-    })
+    if (isUsd(t.currency)) {
+      charges.push({
+        date: t.date.slice(0, 10),
+        merchant: t.merchant,
+        amount: t.amount,
+        category: t.category,
+      })
+    } else {
+      const key = t.currency.toUpperCase()
+      const entry = nonUsdMap.get(key) ?? { currency: key, total: 0, txCount: 0 }
+      entry.total += t.amount
+      entry.txCount += 1
+      nonUsdMap.set(key, entry)
+    }
   }
+
+  const nonUsd: NonUsdSpend[] = [...nonUsdMap.values()]
+    .map((entry) => ({ currency: entry.currency, total: round2(entry.total), txCount: entry.txCount }))
+    .sort((a, b) => b.total - a.total || a.currency.localeCompare(b.currency))
 
   const totalTracked = round2(charges.reduce((sum, c) => sum + c.amount, 0))
 
@@ -131,6 +150,7 @@ export function computeSpendAnalytics(snapshot: Snapshot): SpendAnalytics {
   let subscriptionAnnualTotal = 0
   for (const s of snapshot.subscriptions) {
     if (s.status === 'cancelled') continue
+    if (!isUsd(s.currency)) continue
     if (s.annualCost !== null) {
       subscriptionAnnualTotal += s.annualCost
       continue
@@ -152,5 +172,6 @@ export function computeSpendAnalytics(snapshot: Snapshot): SpendAnalytics {
     byMonth: monthlyBuckets(charges),
     subscriptionAnnualTotal: round2(subscriptionAnnualTotal),
     recurringBillsAnnualTotal: round2(recurringBillsAnnualTotal),
+    nonUsd,
   }
 }

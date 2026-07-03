@@ -34,18 +34,38 @@ export async function fetchHealth(): Promise<HealthStatus | null> {
   }
 }
 
-export async function fetchSnapshot(): Promise<Snapshot | null> {
+/**
+ * Discriminated result of a snapshot fetch:
+ * - `owner`   — the server returned a real owner snapshot (has a profile, mode === 'owner').
+ * - `bundled` — the server signalled the client to use its bundled synthetic persona
+ *               ({ bundled: true } marker, or a synthetic-mode payload with no profile).
+ * - `error`   — network failure or non-OK response (status carried for messaging).
+ */
+export type SnapshotResult =
+  | { kind: 'owner'; snapshot: Snapshot }
+  | { kind: 'bundled' }
+  | { kind: 'error'; status: number }
+
+export async function fetchSnapshot(): Promise<SnapshotResult> {
+  let res: Response
   try {
-    const res = await fetch('/api/snapshot', { headers: authHeaders() })
-    if (!res.ok) return null
-    const data = (await res.json()) as Snapshot & { bundled?: boolean }
-    // The server returns { bundled: true } when no valid access code is present,
-    // signalling the client to use its bundled synthetic persona instead.
-    if (!data || data.bundled) return null
-    return data
+    res = await fetch('/api/snapshot', { headers: authHeaders() })
   } catch {
-    return null
+    return { kind: 'error', status: 0 }
   }
+  if (!res.ok) return { kind: 'error', status: res.status }
+  let data: (Snapshot & { bundled?: boolean }) | null
+  try {
+    data = (await res.json()) as Snapshot & { bundled?: boolean }
+  } catch {
+    return { kind: 'error', status: res.status }
+  }
+  // The server returns { bundled: true } when no valid access code is present,
+  // signalling the client to use its bundled synthetic persona instead.
+  if (!data || data.bundled || data.mode !== 'owner' || !data.profile) {
+    return { kind: 'bundled' }
+  }
+  return { kind: 'owner', snapshot: data }
 }
 
 export async function postAction(body: {
@@ -84,6 +104,15 @@ export async function streamSse<TResult>(
   body: Record<string, unknown>,
   callbacks: SseCallbacks<TResult>,
 ): Promise<void> {
+  // onDone must fire EXACTLY once — whether from a 'done' frame, normal loop
+  // completion, or a mid-stream throw — so callers can always re-enable UI.
+  let doneFired = false
+  const fireDone = () => {
+    if (doneFired) return
+    doneFired = true
+    callbacks.onDone?.()
+  }
+
   let res: Response
   try {
     res = await fetch(path, {
@@ -93,12 +122,12 @@ export async function streamSse<TResult>(
     })
   } catch {
     callbacks.onError?.('Network error — request failed to send.')
-    callbacks.onDone?.()
+    fireDone()
     return
   }
   if (!res.ok || !res.body) {
     callbacks.onError?.(`Request failed (${res.status})`)
-    callbacks.onDone?.()
+    fireDone()
     return
   }
 
@@ -130,7 +159,7 @@ export async function streamSse<TResult>(
           callbacks.onError?.((JSON.parse(data) as { message?: string }).message ?? 'Unknown error')
           break
         case 'done':
-          callbacks.onDone?.()
+          fireDone()
           break
       }
     } catch {
@@ -138,15 +167,24 @@ export async function streamSse<TResult>(
     }
   }
 
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, idx)
-      buffer = buffer.slice(idx + 2)
-      if (frame.trim() && !frame.startsWith(':')) dispatch(frame)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let idx: number
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        if (frame.trim() && !frame.startsWith(':')) dispatch(frame)
+      }
     }
+  } catch {
+    // Reader threw mid-stream (connection dropped, decode error): surface it and
+    // guarantee completion so busy buttons re-enable.
+    callbacks.onError?.('Connection lost mid-stream')
+  } finally {
+    // Fires exactly once even if a 'done' frame already fired it above.
+    fireDone()
   }
 }

@@ -91,6 +91,7 @@ describe('computeSpendAnalytics', () => {
     expect(a.byMonth).toEqual([])
     expect(a.subscriptionAnnualTotal).toBe(0)
     expect(a.recurringBillsAnnualTotal).toBe(0)
+    expect(a.nonUsd).toEqual([])
   })
 
   it('sums non-null amounts and excludes refunds', () => {
@@ -177,5 +178,48 @@ describe('computeSpendAnalytics', () => {
       }),
     )
     expect(a.recurringBillsAnnualTotal).toBe(1720)
+  })
+
+  it('segregates non-USD charges instead of mixing currencies into USD totals', () => {
+    const a = computeSpendAnalytics(
+      makeSnapshot({
+        transactions: [
+          tx({ date: '2025-01-10', merchant: 'Walmart', amount: 60, category: 'groceries' }),
+          tx({ date: '2025-01-20', merchant: 'DoorDash', amount: 40, category: 'dining' }),
+          // AUD charges must NOT count toward USD totals/categories.
+          tx({ date: '2025-02-01', merchant: 'Woolworths', amount: 30, category: 'groceries', currency: 'AUD' }),
+          tx({ date: '2025-02-05', merchant: 'Coles', amount: 20, category: 'groceries', currency: 'AUD' }),
+          // AUD refund stays excluded, consistent with USD refund handling.
+          tx({ date: '2025-02-06', merchant: 'Coles', amount: 5, category: 'groceries', currency: 'AUD', kind: 'refund' }),
+        ],
+      }),
+    )
+    // (a) AUD excluded from totalTracked / byCategory
+    expect(a.totalTracked).toBe(100)
+    expect(a.byCategory).toHaveLength(2)
+    expect(a.byCategory.find((c) => c.category === 'groceries')).toMatchObject({ total: 60, txCount: 1 })
+    // (b) nonUsd carries the AUD bucket with correct total/txCount (refund excluded)
+    expect(a.nonUsd).toEqual([{ currency: 'AUD', total: 50, txCount: 2 }])
+  })
+
+  it('returns an empty nonUsd bucket when all charges are USD', () => {
+    const a = computeSpendAnalytics(
+      makeSnapshot({
+        transactions: [tx({ date: '2025-01-10', merchant: 'Walmart', amount: 60, category: 'groceries' })],
+      }),
+    )
+    expect(a.nonUsd).toEqual([])
+  })
+
+  it('excludes non-USD subscriptions from the subscription annual total', () => {
+    const a = computeSpendAnalytics(
+      makeSnapshot({
+        subscriptions: [
+          sub({ annualCost: 120 }), // USD, counted
+          sub({ annualCost: 240, currency: 'AUD' }), // non-USD, skipped
+        ],
+      }),
+    )
+    expect(a.subscriptionAnnualTotal).toBe(120)
   })
 })

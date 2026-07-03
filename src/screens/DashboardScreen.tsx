@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { ArrowRight, Repeat, Sparkles, Users, Wallet } from 'lucide-react'
 import type { ScreenProps } from '../lib/screen-props'
 import type { InsightType } from '../lib/types'
-import { fmtDate, fmtMonth, fmtUsd, titleCase } from '../lib/format'
+import { daysBetween, fmtDate, fmtMonth, fmtUsd, titleCase } from '../lib/format'
 
 const INSIGHT_CHIP: Record<InsightType, string> = {
   save_money: 'chip chip--accent',
@@ -18,10 +18,6 @@ const INSIGHT_CHIP: Record<InsightType, string> = {
 function dayValue(iso: string): number {
   const d = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso)
   return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
-}
-
-function daysBetween(target: string, reference: string): number {
-  return Math.round((dayValue(target) - dayValue(reference)) / 86_400_000)
 }
 
 function StatCard({
@@ -71,8 +67,17 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
   const renewingSoon = useMemo(
     () =>
       snapshot.subscriptions
-        .filter((s) => s.nextRenewal !== null && daysBetween(s.nextRenewal, generatedAt) >= 0)
-        .sort((a, b) => daysBetween(a.nextRenewal as string, generatedAt) - daysBetween(b.nextRenewal as string, generatedAt))
+        .filter(
+          (s) =>
+            (s.status === 'active' || s.status === 'trial') &&
+            s.nextRenewal !== null &&
+            daysBetween(generatedAt, s.nextRenewal) >= 0,
+        )
+        .sort(
+          (a, b) =>
+            daysBetween(generatedAt, a.nextRenewal as string) -
+            daysBetween(generatedAt, b.nextRenewal as string),
+        )
         .slice(0, 5),
     [snapshot.subscriptions, generatedAt],
   )
@@ -182,7 +187,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {renewingSoon.map((s) => {
-                const days = daysBetween(s.nextRenewal as string, generatedAt)
+                const days = daysBetween(generatedAt, s.nextRenewal as string)
                 return (
                   <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
