@@ -188,6 +188,7 @@ export interface HealthStatus {
     grok: boolean
     supabase: boolean
     twilio: boolean
+    composio: boolean
     ownerMode: boolean
   }
   model: string
@@ -277,4 +278,36 @@ export interface HealthSignalFlag {
   kind: 'positive' | 'watch' | 'suggestion'
   title: string
   detail: string
+}
+
+// ---- Connections / integrations (Composio-backed) ----
+
+export type ConnectorStatus = 'connected' | 'available' | 'planned'
+
+export interface Connector {
+  id: string
+  name: string
+  category: 'data' | 'finance' | 'productivity' | 'social' | 'dev'
+  /** Composio toolkit slug (e.g. 'gmail', 'github'); null for planned/direct integrations. */
+  toolkit: string | null
+  blurb: string
+  /** What connecting this unlocks inside LifeLens. */
+  unlocks: string
+  status: ConnectorStatus
+}
+
+export interface ConnectorsResponse {
+  /** True when a COMPOSIO_API_KEY is configured server-side. */
+  composioConfigured: boolean
+  /** True when the caller is the owner (live connect actions are owner-only). */
+  owner: boolean
+  connectors: Connector[]
+}
+
+export interface InitiateConnectionResult {
+  ok: boolean
+  /** OAuth URL the user is sent to (present when a live connection was initiated). */
+  redirectUrl?: string
+  status: 'redirect' | 'not_configured' | 'not_owner' | 'error'
+  note?: string
 }

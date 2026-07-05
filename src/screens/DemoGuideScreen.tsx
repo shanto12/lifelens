@@ -15,6 +15,7 @@ const CAPABILITIES: { key: keyof HealthStatus['capabilities']; label: string }[]
   { key: 'grok', label: 'Grok (xAI)' },
   { key: 'supabase', label: 'Supabase' },
   { key: 'twilio', label: 'Twilio' },
+  { key: 'composio', label: 'Composio' },
   { key: 'ownerMode', label: 'Owner mode' },
 ]
 
@@ -122,7 +123,7 @@ export default function DemoGuideScreen({ health, onNavigate }: ScreenProps) {
       </div>
 
       {health === null ? (
-        <div className="card" style={{ borderColor: 'var(--amber)' }} role="status">
+        <div className="card card--amber" role="status">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--amber)', fontWeight: 600 }}>
             <AlertTriangle size={15} aria-hidden />
             Degraded — API layer unreachable

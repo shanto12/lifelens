@@ -48,7 +48,7 @@ function AltCard({ alt, action }: { alt: AltView; action?: ReactNode }) {
   return (
     <div
       style={{
-        background: 'var(--bg-card)',
+        background: 'var(--bg-raised)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-sm)',
         padding: 12,
@@ -400,7 +400,7 @@ export default function SubscriptionsScreen({ snapshot, analytics }: ScreenProps
             across all detected subscriptions
           </div>
         </div>
-        <div className="card" style={{ borderColor: 'var(--accent)' }}>
+        <div className="card card--emerald">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: 'var(--accent)' }}>
             <PiggyBank size={15} />
             <span className="stat-label">Potential savings</span>

@@ -112,7 +112,11 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
   const subAnnual = analytics.subscriptionAnnualTotal
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div className="page-head">
+        <h1>Dashboard</h1>
+        <p>Your life &amp; money at a glance — spending, subscriptions, people, and what needs attention.</p>
+      </div>
       <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
         <StatCard
           icon={<Wallet size={15} />}

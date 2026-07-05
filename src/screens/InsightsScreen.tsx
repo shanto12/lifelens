@@ -154,9 +154,9 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
           <div style={{ marginTop: 16, display: 'grid', gap: 14 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>{brief.headline}</h2>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-              {brief.sections.map((section) => (
+              {brief.sections.map((section, i) => (
                 <div
-                  key={section.title}
+                  key={i}
                   style={{
                     background: 'var(--bg-raised)',
                     border: '1px solid var(--border)',

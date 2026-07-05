@@ -7,7 +7,7 @@ import type { HealthStatus } from '../src/lib/types'
 
 const healthPayload: HealthStatus = {
   ok: true,
-  capabilities: { glm: false, grok: false, supabase: false, twilio: false, ownerMode: false },
+  capabilities: { glm: false, grok: false, supabase: false, twilio: false, composio: false, ownerMode: false },
   mode: 'degraded',
   service: 'lifelens',
   version: '1.0.0',

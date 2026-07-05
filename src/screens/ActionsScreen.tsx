@@ -262,8 +262,8 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
                 Key points
               </div>
               <ul style={{ listStyle: 'none', display: 'grid', gap: 6 }}>
-                {script.keyPoints.map((point) => (
-                  <li key={point} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
+                {script.keyPoints.map((point, i) => (
+                  <li key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13 }}>
                     <Check size={15} aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
                     {point}
                   </li>
@@ -277,9 +277,9 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
                   Objection handling
                 </div>
                 <div style={{ display: 'grid', gap: 8 }}>
-                  {script.objectionHandlers.map((o) => (
+                  {script.objectionHandlers.map((o, i) => (
                     <div
-                      key={o.objection}
+                      key={i}
                       style={{
                         border: '1px solid var(--border)',
                         background: 'rgba(255,255,255,0.03)',

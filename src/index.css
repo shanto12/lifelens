@@ -19,7 +19,7 @@
 
   --text: #eceef4;
   --text-dim: rgba(236, 238, 244, 0.62);
-  --text-faint: rgba(236, 238, 244, 0.42);
+  --text-faint: rgba(236, 238, 244, 0.58);
 
   /* accents (rgb triples so we can compose glows/tints inline) */
   --accent-rgb: 110, 231, 179;   /* emerald — money & positive */
@@ -109,6 +109,16 @@ textarea:focus {
   outline-offset: 1px;
 }
 
+/* Keyboard focus ring for buttons, chips-as-buttons, and links.
+   :focus-visible keeps it keyboard-only (no ring on mouse click). */
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid rgba(var(--violet-rgb), 0.9);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -141,6 +151,9 @@ textarea:focus {
   position: absolute;
   border-radius: 50%;
   filter: blur(30px);
+  /* Promote to its own compositor layer so the drift animation doesn't force
+     the many backdrop-filter glass cards above it to repaint each frame. */
+  will-change: transform;
   animation: ll-drift 18s ease-in-out infinite;
 }
 .app-glow--1 {

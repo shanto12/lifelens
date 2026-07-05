@@ -12,6 +12,7 @@ import {
   Lock,
   Unlock,
   Scan,
+  Plug,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { OwnerError } from '../App'
@@ -26,6 +27,7 @@ const NAV: { id: ScreenId; label: string; icon: ReactNode; accent: string }[] = 
   { id: 'health', label: 'Health', icon: <HeartPulse size={20} />, accent: '251,113,133' },
   { id: 'insights', label: 'Insights', icon: <Sparkles size={20} />, accent: '167,139,250' },
   { id: 'actions', label: 'Actions', icon: <PhoneCall size={20} />, accent: '251,191,36' },
+  { id: 'connections', label: 'Connect', icon: <Plug size={20} />, accent: '167,139,250' },
   { id: 'guide', label: 'Guide', icon: <BookOpen size={20} />, accent: '103,232,249' },
 ]
 
