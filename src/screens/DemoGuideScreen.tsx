@@ -15,6 +15,7 @@ const CAPABILITIES: { key: keyof HealthStatus['capabilities']; label: string }[]
   { key: 'grok', label: 'Grok (xAI)' },
   { key: 'supabase', label: 'Supabase' },
   { key: 'twilio', label: 'Twilio' },
+  { key: 'composio', label: 'Composio' },
   { key: 'ownerMode', label: 'Owner mode' },
 ]
 
@@ -116,15 +117,13 @@ const TALK_TRACKS: { label: string; bullets: string[] }[] = [
 export default function DemoGuideScreen({ health, onNavigate }: ScreenProps) {
   return (
     <div className="grid" style={{ maxWidth: 1000 }}>
-      <div style={{ marginBottom: 2 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>Demo Guide</h1>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Live system status, how it was built, and how to present it.
-        </p>
+      <div className="page-head">
+        <h1>Demo Guide</h1>
+        <p>Live system status, how it was built, and how to present it.</p>
       </div>
 
       {health === null ? (
-        <div className="card" style={{ borderColor: 'var(--amber)' }} role="status">
+        <div className="card card--amber" role="status">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--amber)', fontWeight: 600 }}>
             <AlertTriangle size={15} aria-hidden />
             Degraded — API layer unreachable

@@ -12,6 +12,7 @@ import PeopleScreen from './screens/PeopleScreen'
 import HealthScreen from './screens/HealthScreen'
 import InsightsScreen from './screens/InsightsScreen'
 import ActionsScreen from './screens/ActionsScreen'
+import ConnectionsScreen from './screens/ConnectionsScreen'
 import DemoGuideScreen from './screens/DemoGuideScreen'
 
 const SCREENS: Record<ScreenId, (props: ScreenProps) => React.ReactElement> = {
@@ -22,6 +23,7 @@ const SCREENS: Record<ScreenId, (props: ScreenProps) => React.ReactElement> = {
   health: HealthScreen,
   insights: InsightsScreen,
   actions: ActionsScreen,
+  connections: ConnectionsScreen,
   guide: DemoGuideScreen,
 }
 

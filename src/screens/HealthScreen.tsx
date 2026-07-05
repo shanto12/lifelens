@@ -7,11 +7,11 @@ import { fmtDate, fmtUsd, pct, titleCase } from '../lib/format'
 
 const FLAG_META: Record<
   HealthSignalFlag['kind'],
-  { label: string; color: string; dim: string; icon: typeof HeartPulse }
+  { label: string; color: string; dim: string; card: string; icon: typeof HeartPulse }
 > = {
-  positive: { label: 'Positive signals', color: 'var(--accent)', dim: 'var(--accent-dim)', icon: HeartPulse },
-  watch: { label: 'Worth watching', color: 'var(--rose)', dim: 'var(--rose-dim)', icon: AlertTriangle },
-  suggestion: { label: 'Suggestions', color: 'var(--violet)', dim: 'var(--violet-dim)', icon: Lightbulb },
+  positive: { label: 'Positive signals', color: 'var(--accent)', dim: 'var(--accent-dim)', card: 'card--emerald', icon: HeartPulse },
+  watch: { label: 'Worth watching', color: 'var(--rose)', dim: 'var(--rose-dim)', card: 'card--rose', icon: AlertTriangle },
+  suggestion: { label: 'Suggestions', color: 'var(--violet)', dim: 'var(--violet-dim)', card: 'card--violet', icon: Lightbulb },
 }
 
 const FLAG_ORDER: HealthSignalFlag['kind'][] = ['positive', 'watch', 'suggestion']
@@ -48,10 +48,10 @@ interface SwapView {
   url: string | null
 }
 
-function ShareBar({ label, value, color }: { label: string; value: number; color: string }) {
+function ShareBar({ label, value, gradient, glow }: { label: string; value: number; gradient: string; glow: string }) {
   const clamped = Math.max(0, Math.min(100, value))
   return (
-    <div style={{ display: 'grid', gap: 4 }}>
+    <div style={{ display: 'grid', gap: 5 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
         <span className="muted">{label}</span>
         <span className="mono">{pct(clamped)}</span>
@@ -59,9 +59,17 @@ function ShareBar({ label, value, color }: { label: string; value: number; color
       <div
         role="img"
         aria-label={`${label}: ${pct(clamped)} of tracked spend`}
-        style={{ height: 6, borderRadius: 999, background: 'var(--bg-hover)', overflow: 'hidden' }}
+        style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}
       >
-        <div style={{ width: `${clamped}%`, height: '100%', borderRadius: 999, background: color }} />
+        <div
+          style={{
+            width: `${clamped}%`,
+            height: '100%',
+            borderRadius: 999,
+            background: gradient,
+            boxShadow: `0 0 12px ${glow}`,
+          }}
+        />
       </div>
     </div>
   )
@@ -133,12 +141,10 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
   const groceriesShare = analytics.byCategory.find((c) => c.category === 'groceries')?.pctOfTotal ?? 0
 
   return (
-    <div className="grid" style={{ maxWidth: 1100 }}>
-      <div style={{ marginBottom: 2 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>Health</h1>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Wellbeing signals inferred from spending, food habits and calendar patterns.
-        </p>
+    <div className="grid" style={{ maxWidth: 1120 }}>
+      <div className="page-head">
+        <h1>Health</h1>
+        <p>Wellbeing signals inferred from spending, food habits and calendar patterns.</p>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
@@ -147,7 +153,7 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
           const Icon = meta.icon
           const group = flags.filter((f) => f.kind === kind)
           return (
-            <section key={kind} aria-label={meta.label} className="card">
+            <section key={kind} aria-label={meta.label} className={`card ${meta.card}`}>
               <div className="card-title" style={{ color: meta.color, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon size={13} aria-hidden />
                 {meta.label}
@@ -183,7 +189,7 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-        <div className="card">
+        <div className="card card--cyan">
           <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Utensils size={13} aria-hidden />
             Food &amp; habits
@@ -210,16 +216,26 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
               No dietary notes derived yet.
             </div>
           )}
-          <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
-            <ShareBar label="Dining out" value={diningShare} color="var(--rose)" />
-            <ShareBar label="Groceries" value={groceriesShare} color="var(--accent)" />
+          <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+            <ShareBar
+              label="Dining out"
+              value={diningShare}
+              gradient="linear-gradient(90deg, #FB7185, #FBBF24)"
+              glow="rgba(251,113,133,0.45)"
+            />
+            <ShareBar
+              label="Groceries"
+              value={groceriesShare}
+              gradient="linear-gradient(90deg, #6EE7B3, #67E8F9)"
+              glow="rgba(110,231,179,0.45)"
+            />
             <div className="faint" style={{ fontSize: 11 }}>
               Share of total tracked spend. A groceries-heavy mix usually correlates with more home cooking.
             </div>
           </div>
         </div>
 
-        <div className="card">
+        <div className="card card--emerald">
           <div className="card-title">Healthier swaps</div>
           {swaps.length === 0 ? (
             <div className="faint" style={{ fontSize: 12 }}>
@@ -308,7 +324,7 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
         )}
       </div>
 
-      <div className="card">
+      <div className="card card--cyan">
         <div className="card-title">Fitness &amp; wellbeing events</div>
         {wellbeingEvents.length === 0 ? (
           <div className="empty-state">No fitness or health events in this snapshot.</div>

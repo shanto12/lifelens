@@ -22,6 +22,7 @@ export default async (req) => {
     const twilioToken = process.env.TWILIO_AUTH_TOKEN || ''
     const twilioFrom = process.env.TWILIO_FROM_NUMBER || ''
     const accessCode = process.env.LIFELENS_ACCESS_CODE || ''
+    const composioKey = process.env.COMPOSIO_API_KEY || ''
     const model = process.env.GLM_MODEL || 'glm-5.2'
 
     return json(200, {
@@ -34,6 +35,7 @@ export default async (req) => {
         grok: !!grokKey,
         supabase: !!(supabaseUrl && supabaseKey && supabaseGate),
         twilio: !!(twilioSid && twilioToken && twilioFrom),
+        composio: !!composioKey,
         ownerMode: !!accessCode,
       },
       model,

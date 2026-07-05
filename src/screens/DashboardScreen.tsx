@@ -22,25 +22,31 @@ function dayValue(iso: string): number {
 
 function StatCard({
   icon,
-  color,
+  accent,
+  variant,
   label,
   value,
   sub,
 }: {
   icon: ReactNode
-  color: string
+  /** rgb triple, e.g. '110,231,179' */
+  accent: string
+  variant: string
   label: string
   value: string
   sub: string
 }) {
+  const color = `rgb(${accent})`
   return (
-    <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color }}>
+    <div className={`card ${variant}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color }}>
         {icon}
         <span className="stat-label">{label}</span>
       </div>
-      <div className="stat-value">{value}</div>
-      <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
+      <div className="stat-value" style={{ color, textShadow: `0 0 30px rgba(${accent}, 0.4)` }}>
+        {value}
+      </div>
+      <div className="faint" style={{ fontSize: 11, marginTop: 3 }}>
         {sub}
       </div>
     </div>
@@ -106,48 +112,57 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
   const subAnnual = analytics.subscriptionAnnualTotal
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div className="page-head">
+        <h1>Dashboard</h1>
+        <p>Your life &amp; money at a glance — spending, subscriptions, people, and what needs attention.</p>
+      </div>
       <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
         <StatCard
           icon={<Wallet size={15} />}
-          color="var(--accent)"
+          accent="110,231,179"
+          variant="card--emerald"
           label="Tracked spend"
           value={fmtUsd(analytics.totalTracked, { compact: true })}
           sub={monthRange}
         />
         <StatCard
           icon={<Repeat size={15} />}
-          color="var(--amber)"
+          accent="251,191,36"
+          variant="card--amber"
           label="Subscription burn"
           value={`${fmtUsd(subAnnual, { compact: true })}/yr`}
           sub={`${fmtUsd(subAnnual / 12)}/mo across ${snapshot.subscriptions.length} subscriptions`}
         />
         <StatCard
           icon={<Users size={15} />}
-          color="var(--sky)"
+          accent="103,232,249"
+          variant="card--cyan"
           label="People mapped"
           value={String(snapshot.people.length)}
           sub={`${familyCount} family`}
         />
         <button
-          className="card"
+          className="card card--violet"
           onClick={() => onNavigate('insights')}
           style={{ textAlign: 'left', cursor: 'pointer', color: 'inherit', display: 'block', width: '100%' }}
           aria-label={`${openInsights} open insights — go to insights`}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: 'var(--violet)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: 'var(--violet)' }}>
             <Sparkles size={15} />
             <span className="stat-label">Insights open</span>
           </div>
-          <div className="stat-value">{openInsights}</div>
-          <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
+          <div className="stat-value" style={{ color: 'var(--violet)', textShadow: '0 0 30px rgba(167,139,250,0.4)' }}>
+            {openInsights}
+          </div>
+          <div className="faint" style={{ fontSize: 11, marginTop: 3 }}>
             View all insights →
           </div>
         </button>
       </div>
 
       <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))' }}>
-        <div className="card">
+        <div className="card card--emerald">
           <div className="card-title">Where the money goes</div>
           {topCategories.length === 0 ? (
             <div className="empty-state">No categorized spend yet.</div>
@@ -161,13 +176,14 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
                   <span className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {titleCase(c.category)}
                   </span>
-                  <div style={{ background: 'var(--bg-hover)', borderRadius: 4, height: 10, overflow: 'hidden' }} aria-hidden="true">
+                  <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 5, height: 10, overflow: 'hidden' }} aria-hidden="true">
                     <div
                       style={{
                         width: `${maxCategory > 0 ? Math.max((c.total / maxCategory) * 100, 1) : 0}%`,
                         height: '100%',
-                        background: 'var(--accent)',
-                        borderRadius: 4,
+                        background: 'linear-gradient(90deg, rgb(110,231,179), rgb(103,232,249))',
+                        borderRadius: 5,
+                        boxShadow: '0 0 14px rgba(110,231,179,0.45)',
                       }}
                     />
                   </div>
@@ -180,7 +196,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
           )}
         </div>
 
-        <div className="card">
+        <div className="card card--amber">
           <div className="card-title">Renewing soon</div>
           {renewingSoon.length === 0 ? (
             <div className="empty-state">No upcoming renewals detected.</div>
@@ -211,7 +227,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
       </div>
 
       <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))' }}>
-        <div className="card">
+        <div className="card card--cyan">
           <div className="card-title">Life pulse</div>
           {upcomingEvents.length === 0 ? (
             <div className="empty-state">No upcoming events on the calendar.</div>
@@ -248,7 +264,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
           )}
         </div>
 
-        <div className="card">
+        <div className="card card--violet">
           <div className="card-title">Latest insights</div>
           {latestInsights.length === 0 ? (
             <div className="empty-state">No insights generated yet.</div>

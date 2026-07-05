@@ -8,6 +8,7 @@ export type ScreenId =
   | 'health'
   | 'insights'
   | 'actions'
+  | 'connections'
   | 'guide'
 
 /** Every screen receives the same props object and uses what it needs. */

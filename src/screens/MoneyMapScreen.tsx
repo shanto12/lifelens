@@ -92,7 +92,11 @@ export default function MoneyMapScreen({ snapshot, analytics }: ScreenProps) {
   const nonUsd = analytics.nonUsd
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      <div className="page-head">
+        <h1>Money Map</h1>
+        <p>Where the money goes — categories, merchants, month-over-month trend, and recurring bills.</p>
+      </div>
       {nonUsd.length > 0 && (
         <div className="card" style={{ display: 'grid', gap: 6 }}>
           <div className="stat-label">Non-USD activity — shown separately</div>

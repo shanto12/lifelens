@@ -1,4 +1,4 @@
-import type { HealthStatus, Snapshot } from './types'
+import type { ConnectorsResponse, HealthStatus, InitiateConnectionResult, Snapshot } from './types'
 
 const ACCESS_CODE_KEY = 'lifelens.accessCode'
 
@@ -83,6 +83,30 @@ export async function postAction(body: {
     return (await res.json()) as { ok: boolean; id?: number }
   } catch {
     return { ok: false }
+  }
+}
+
+export async function fetchConnectors(): Promise<ConnectorsResponse | null> {
+  try {
+    const res = await fetch('/api/connectors', { headers: authHeaders() })
+    if (!res.ok) return null
+    return (await res.json()) as ConnectorsResponse
+  } catch {
+    return null
+  }
+}
+
+export async function initiateConnection(toolkit: string): Promise<InitiateConnectionResult> {
+  try {
+    const res = await fetch('/api/connectors', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ toolkit }),
+    })
+    if (!res.ok) return { ok: false, status: 'error', note: `Request failed (${res.status})` }
+    return (await res.json()) as InitiateConnectionResult
+  } catch {
+    return { ok: false, status: 'error', note: 'Network error' }
   }
 }
 

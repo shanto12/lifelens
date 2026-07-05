@@ -106,14 +106,12 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
 
   return (
     <div className="grid" style={{ maxWidth: 1100 }}>
-      <div style={{ marginBottom: 2 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>Insights</h1>
-        <p className="muted" style={{ fontSize: 13 }}>
-          AI daily brief over your compact spend summary, plus the running insight ledger.
-        </p>
+      <div className="page-head">
+        <h1>Insights</h1>
+        <p>AI daily brief over your compact spend summary, plus the running insight ledger.</p>
       </div>
 
-      <div className="card">
+      <div className="card card--violet">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn--primary" onClick={generateBrief} disabled={streaming}>
             <Sparkles size={14} aria-hidden />
@@ -156,9 +154,9 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
           <div style={{ marginTop: 16, display: 'grid', gap: 14 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>{brief.headline}</h2>
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-              {brief.sections.map((section) => (
+              {brief.sections.map((section, i) => (
                 <div
-                  key={section.title}
+                  key={i}
                   style={{
                     background: 'var(--bg-raised)',
                     border: '1px solid var(--border)',

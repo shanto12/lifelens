@@ -11,21 +11,24 @@ import {
   BookOpen,
   Lock,
   Unlock,
+  Scan,
+  Plug,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { OwnerError } from '../App'
 import type { ScreenId } from '../lib/screen-props'
 import type { SnapshotMode } from '../lib/types'
 
-const NAV: { id: ScreenId; label: string; icon: ReactNode }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-  { id: 'money', label: 'Money Map', icon: <Wallet size={16} /> },
-  { id: 'subscriptions', label: 'Subscriptions', icon: <Repeat size={16} /> },
-  { id: 'people', label: 'People & Family', icon: <Users size={16} /> },
-  { id: 'health', label: 'Health', icon: <HeartPulse size={16} /> },
-  { id: 'insights', label: 'Insights', icon: <Sparkles size={16} /> },
-  { id: 'actions', label: 'Actions & Calls', icon: <PhoneCall size={16} /> },
-  { id: 'guide', label: 'Demo Guide', icon: <BookOpen size={16} /> },
+const NAV: { id: ScreenId; label: string; icon: ReactNode; accent: string }[] = [
+  { id: 'dashboard', label: 'Home', icon: <LayoutDashboard size={20} />, accent: '110,231,179' },
+  { id: 'money', label: 'Money', icon: <Wallet size={20} />, accent: '110,231,179' },
+  { id: 'subscriptions', label: 'Subs', icon: <Repeat size={20} />, accent: '167,139,250' },
+  { id: 'people', label: 'People', icon: <Users size={20} />, accent: '103,232,249' },
+  { id: 'health', label: 'Health', icon: <HeartPulse size={20} />, accent: '251,113,133' },
+  { id: 'insights', label: 'Insights', icon: <Sparkles size={20} />, accent: '167,139,250' },
+  { id: 'actions', label: 'Actions', icon: <PhoneCall size={20} />, accent: '251,191,36' },
+  { id: 'connections', label: 'Connect', icon: <Plug size={20} />, accent: '167,139,250' },
+  { id: 'guide', label: 'Guide', icon: <BookOpen size={20} />, accent: '103,232,249' },
 ]
 
 interface ShellProps {
@@ -83,48 +86,72 @@ export default function Shell({
 
   return (
     <div className="shell">
+      <div className="app-atmosphere" aria-hidden="true">
+        <div className="app-glow app-glow--1" />
+        <div className="app-glow app-glow--2" />
+        <div className="app-glow app-glow--3" />
+      </div>
       <aside className="shell-aside">
         <div
           className="shell-brand"
-          style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 8px', marginBottom: 22 }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, marginBottom: 26 }}
         >
-          <img src="/lens.svg" alt="" width={26} height={26} style={{ borderRadius: 6 }} />
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>LifeLens</div>
-            <div style={{ fontSize: 10, color: 'var(--text-faint)', letterSpacing: '0.06em' }}>
-              LIFE &amp; MONEY COPILOT
-            </div>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 13,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(140deg, rgba(110,231,179,0.95), rgba(167,139,250,0.95))',
+              boxShadow: '0 0 24px -4px rgba(167,139,250,0.6)',
+            }}
+          >
+            <Scan size={21} color="#0a0a0c" strokeWidth={2.4} />
+          </div>
+          <div
+            style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '0.08em', color: 'var(--text-faint)' }}
+          >
+            LIFELENS
           </div>
         </div>
         <nav className="shell-nav" aria-label="Primary">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              aria-current={active === item.id ? 'page' : undefined}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '9px 10px',
-                borderRadius: 8,
-                border: 'none',
-                background: active === item.id ? 'var(--bg-hover)' : 'transparent',
-                color: active === item.id ? 'var(--text)' : 'var(--text-dim)',
-                fontSize: 13,
-                fontWeight: active === item.id ? 600 : 500,
-                textAlign: 'left',
-              }}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          {NAV.map((item) => {
+            const on = active === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => onNavigate(item.id)}
+                aria-current={on ? 'page' : undefined}
+                title={item.label}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '11px 0',
+                  borderRadius: 14,
+                  border: 'none',
+                  background: on ? `rgba(${item.accent},0.10)` : 'transparent',
+                  color: on ? `rgb(${item.accent})` : 'var(--text-faint)',
+                  boxShadow: on
+                    ? `inset 0 0 0 1px rgba(${item.accent},0.22), 0 0 24px -6px rgba(${item.accent},0.5)`
+                    : 'none',
+                  fontWeight: on ? 600 : 500,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {item.icon}
+                <span style={{ fontSize: 9.5, letterSpacing: '0.03em' }}>{item.label}</span>
+              </button>
+            )
+          })}
         </nav>
         <div className="shell-aside__footer">
-          Independent personal tool.
+          Independent
           <br />
-          Data stays server-side.
+          personal tool
         </div>
       </aside>
 
