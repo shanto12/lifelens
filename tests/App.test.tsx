@@ -47,16 +47,9 @@ describe('LifeLens shell', () => {
   it('renders the sidebar navigation once the snapshot loads', async () => {
     render(<App />)
     // findByRole awaits the post-loading render.
-    expect(await screen.findByRole('button', { name: /Money Map/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Money/ })).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: /Primary/i })
-    for (const label of [
-      /Dashboard/,
-      /Subscriptions/,
-      /People & Family/,
-      /Insights/,
-      /Actions & Calls/,
-      /Demo Guide/,
-    ]) {
+    for (const label of [/Home/, /Subs/, /People/, /Insights/, /Actions/, /Guide/]) {
       expect(within(nav).getByRole('button', { name: label })).toBeInTheDocument()
     }
   })
@@ -70,7 +63,7 @@ describe('LifeLens shell', () => {
     const user = userEvent.setup()
     render(<App />)
     const nav = await screen.findByRole('navigation', { name: /Primary/i })
-    await user.click(within(nav).getByRole('button', { name: /Subscriptions/ }))
+    await user.click(within(nav).getByRole('button', { name: /Subs/ }))
 
     // Sanity: the merchant we look for really is in the bundled persona.
     expect(syntheticSnapshot.subscriptions.some((s) => s.merchant === 'Hulu')).toBe(true)
@@ -83,7 +76,7 @@ describe('LifeLens shell', () => {
     const user = userEvent.setup()
     render(<App />)
     const nav = await screen.findByRole('navigation', { name: /Primary/i })
-    await user.click(within(nav).getByRole('button', { name: /Demo Guide/ }))
+    await user.click(within(nav).getByRole('button', { name: /Guide/ }))
 
     // The guide's env cheatsheet references the GLM provider (GLM_API_KEY / glm-5.1).
     const glmMentions = await screen.findAllByText(/GLM/i)
