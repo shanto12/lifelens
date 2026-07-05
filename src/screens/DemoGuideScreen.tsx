@@ -60,7 +60,7 @@ const WALKTHROUGH: { text: string; screen?: ScreenId }[] = [
 const ENV_VARS: { name: string; purpose: string; scope: string }[] = [
   { name: 'GLM_API_KEY', purpose: 'Z.ai GLM key — daily briefs & live alternatives research', scope: 'AI features' },
   { name: 'GLM_BASE_URL', purpose: 'Override for the Z.ai endpoint (defaults to the coding-plan URL)', scope: 'optional' },
-  { name: 'GLM_MODEL', purpose: 'Model id (defaults to glm-5.1)', scope: 'optional' },
+  { name: 'GLM_MODEL', purpose: 'Model id (defaults to glm-5.2)', scope: 'optional' },
   { name: 'XAI_API_KEY', purpose: 'xAI Grok key — optional call-script provider', scope: 'optional' },
   { name: 'SUPABASE_URL', purpose: 'Supabase project URL (owner snapshot store)', scope: 'owner mode' },
   { name: 'SUPABASE_ANON_KEY', purpose: 'Anon key — useless alone; RLS is deny-all without the gate header', scope: 'owner mode' },

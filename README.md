@@ -67,7 +67,7 @@ nothing is exposed to the client. The authoritative names are in
 | `LIFELENS_ACCESS_CODE` | Owner mode | Long random string; compared server-side |
 | `GLM_API_KEY` | Briefs, alternatives, call scripts | Z.ai GLM (primary provider) |
 | `GLM_BASE_URL` | Z.ai endpoint override | Optional |
-| `GLM_MODEL` | Model id | Optional; defaults to `glm-5.1` |
+| `GLM_MODEL` | Model id | Optional; defaults to `glm-5.2` |
 | `XAI_API_KEY` | Grok alternate provider | Optional |
 | `SUPABASE_URL` | Owner snapshot storage | |
 | `SUPABASE_ANON_KEY` | PostgREST apikey (inert alone — RLS denies all) | Public by design |
