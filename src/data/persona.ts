@@ -284,6 +284,7 @@ export const syntheticSnapshot: Snapshot = {
     { id: 25, date: '2026-03-02', merchant: 'H-E-B', amount: 121.88, currency: 'USD', category: 'groceries', kind: 'one_time', subject: null },
     { id: 26, date: '2026-03-04', merchant: 'OpenAI', amount: 20.0, currency: 'USD', category: 'ai_tools', kind: 'recurring_charge', subject: 'Your ChatGPT Plus receipt' },
     { id: 27, date: '2026-03-06', merchant: 'Uber', amount: 19.42, currency: 'USD', category: 'transport', kind: 'one_time', subject: null },
+    { id: 271, date: '2026-03-08', merchant: 'Uber', amount: 42.5, currency: 'AUD', category: 'transport', kind: 'one_time', subject: 'Trip in Sydney — conference travel' },
     { id: 28, date: '2026-03-08', merchant: 'Amazon', amount: 89.99, currency: 'USD', category: 'shopping', kind: 'one_time', subject: 'Order: soccer cleats for Maya' },
     { id: 29, date: '2026-03-10', merchant: 'Thorne', amount: 56.0, currency: 'USD', category: 'health', kind: 'one_time', subject: 'Supplement order — vitamin D + magnesium' },
     { id: 30, date: '2026-03-12', merchant: 'DoorDash', amount: 33.75, currency: 'USD', category: 'dining', kind: 'one_time', subject: null },

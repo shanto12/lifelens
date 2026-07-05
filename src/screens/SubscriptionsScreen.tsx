@@ -351,8 +351,14 @@ export default function SubscriptionsScreen({ snapshot, analytics }: ScreenProps
   // tracked as subscriptions — surfaces spend that would otherwise go unnoticed.
   const untracked = useMemo(() => {
     const tracked = new Set(snapshot.subscriptions.map((s) => s.merchant.trim().toLowerCase()))
+    // Only surface subscription-like categories. Discretionary spend (dining,
+    // rideshare, groceries, one-off shopping) can look periodic over a few
+    // months without being a real subscription, so exclude those categories.
+    const subscriptionLike = new Set([
+      'streaming', 'software', 'ai_tools', 'cloud', 'telecom', 'fitness', 'insurance', 'news', 'entertainment',
+    ])
     return detectRecurring(snapshot.transactions).filter(
-      (s) => !tracked.has(s.merchant.trim().toLowerCase()),
+      (s) => !tracked.has(s.merchant.trim().toLowerCase()) && subscriptionLike.has(s.category),
     )
   }, [snapshot.subscriptions, snapshot.transactions])
 
@@ -489,7 +495,7 @@ export default function SubscriptionsScreen({ snapshot, analytics }: ScreenProps
                 </thead>
                 <tbody>
                   {untracked.map((s) => (
-                    <tr key={s.merchant}>
+                    <tr key={`${s.merchant}::${s.currency}`}>
                       <td style={{ fontWeight: 600 }}>{s.merchant}</td>
                       <td className="muted">{titleCase(s.cadence)}</td>
                       <td className="mono" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>

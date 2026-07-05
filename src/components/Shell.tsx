@@ -82,19 +82,12 @@ export default function Shell({
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      <aside
-        style={{
-          width: 218,
-          flexShrink: 0,
-          background: 'var(--bg-raised)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '18px 12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 8px', marginBottom: 22 }}>
+    <div className="shell">
+      <aside className="shell-aside">
+        <div
+          className="shell-brand"
+          style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '0 8px', marginBottom: 22 }}
+        >
           <img src="/lens.svg" alt="" width={26} height={26} style={{ borderRadius: 6 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>LifeLens</div>
@@ -103,7 +96,7 @@ export default function Shell({
             </div>
           </div>
         </div>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }} aria-label="Primary">
+        <nav className="shell-nav" aria-label="Primary">
           {NAV.map((item) => (
             <button
               key={item.id}
@@ -128,28 +121,19 @@ export default function Shell({
             </button>
           ))}
         </nav>
-        <div style={{ marginTop: 'auto', padding: '0 8px', fontSize: 11, color: 'var(--text-faint)' }}>
+        <div className="shell-aside__footer">
           Independent personal tool.
           <br />
           Data stays server-side.
         </div>
       </aside>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <header
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '12px 22px',
-            borderBottom: '1px solid var(--border)',
-            background: 'var(--bg-raised)',
-          }}
-        >
+      <div className="shell-body">
+        <header className="shell-header">
           <span className={mode === 'owner' ? 'chip chip--accent' : 'chip chip--dim'}>
             {mode === 'owner' ? 'OWNER DATA' : 'SYNTHETIC PERSONA'}
           </span>
-          <span className="faint" style={{ fontSize: 12 }}>
+          <span className="faint" style={{ fontSize: 12, minWidth: 0 }}>
             {mode === 'owner'
               ? 'Showing your real snapshot (access-code verified, served server-side).'
               : 'Showing a synthetic demo persona. Unlock with your access code to see real data.'}
@@ -222,7 +206,7 @@ export default function Shell({
             )}
           </div>
         </header>
-        <main style={{ flex: 1, overflowY: 'auto', padding: 22 }}>{children}</main>
+        <main className="shell-main">{children}</main>
       </div>
     </div>
   )

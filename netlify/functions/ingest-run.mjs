@@ -49,7 +49,54 @@ async function sbInsert(env, table, row) {
   return res.json()
 }
 
+async function sbUpdate(env, table, filter, patch) {
+  const res = await fetch(`${env.url}/rest/v1/${table}?${filter}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: env.key,
+      Authorization: `Bearer ${env.key}`,
+      'x-lifelens-key': env.gate,
+      'content-type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(`Supabase update ${table} failed (${res.status})`)
+}
+
 const round2 = (n) => Math.round(n * 100) / 100
+
+// Advance a YYYY-MM-DD date by one cadence period. For monthly/quarterly/annual the
+// day-of-month is taken from `anchorDay` (the ORIGINAL renewal day), not the running
+// value, so a Jan-31 anchor lands on Feb-28 then recovers to Mar-31 instead of pinning
+// to the 28th forever.
+function advanceByCadence(dateStr, cadence, anchorDay) {
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return null
+  if (cadence === 'weekly') {
+    return new Date(Date.UTC(y, m - 1, d + 7)).toISOString().slice(0, 10)
+  }
+  const add = { monthly: 1, quarterly: 3, annual: 12 }
+  const months = add[cadence]
+  if (months === undefined) return null
+  const target = new Date(Date.UTC(y, m - 1 + months, 1))
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+  target.setUTCDate(Math.min(anchorDay || d, lastDay))
+  return target.toISOString().slice(0, 10)
+}
+
+// Roll a past-due renewal forward to the next occurrence that is >= todayStr.
+function nextRenewalOnOrAfter(dateStr, cadence, todayStr) {
+  const anchorDay = Number(dateStr.slice(8, 10)) || undefined
+  let cur = dateStr.slice(0, 10)
+  // Bounded loop: at most ~130 monthly steps covers a decade of staleness.
+  for (let i = 0; i < 130 && cur < todayStr; i++) {
+    const next = advanceByCadence(cur, cadence, anchorDay)
+    if (!next || next <= cur) return null
+    cur = next
+  }
+  return cur < todayStr ? null : cur
+}
 
 function num(v) {
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -131,6 +178,29 @@ export default async (req) => {
     }
 
     const todayStr = now.toISOString().slice(0, 10)
+
+    // (0) Self-heal stale renewals: active/trial subs whose next_renewal is in the
+    // past get rolled forward by their cadence to the next future occurrence, so
+    // "renewing soon" stays accurate and alerts don't silently drop or repeat.
+    let renewalsHealed = 0
+    for (const s of subs) {
+      // Heal every non-cancelled sub — matching how the wealth/consolidation
+      // insights below count "active" (status !== 'cancelled'). cadence 'unknown'
+      // makes nextRenewalOnOrAfter return null, so those rows are left untouched.
+      if (!s || s.status === 'cancelled' || !s.next_renewal) continue
+      const cur = String(s.next_renewal).slice(0, 10)
+      if (cur >= todayStr) continue
+      const rolled = nextRenewalOnOrAfter(cur, s.cadence, todayStr)
+      if (!rolled || rolled === cur) continue
+      try {
+        await sbUpdate(env, 'subscriptions', `id=eq.${s.id}`, { next_renewal: rolled })
+        s.next_renewal = rolled // keep in-memory copy fresh for the alert loop below
+        renewalsHealed++
+      } catch (e) {
+        console.log(`ingest-run: renewal roll-forward failed for sub ${s.id}: ${e.message}`)
+      }
+    }
+    if (renewalsHealed) console.log(`ingest-run: rolled forward ${renewalsHealed} stale renewal(s)`)
 
     // (a) renewals due within 14 days → 'alert' insights
     const in14 = new Date(now.getTime() + 14 * 24 * 3600 * 1000)
@@ -256,7 +326,7 @@ export default async (req) => {
         finished_at: new Date().toISOString(),
         kind: 'ingest_run',
         status: 'ok',
-        stats: { inserted, considered },
+        stats: { inserted, considered, renewalsHealed },
       })
     } catch (err) {
       console.log('ingest-run: failed to write runs row:', err && err.message)
