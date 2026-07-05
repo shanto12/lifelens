@@ -133,16 +133,17 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
   )
 
   return (
-    <div className="grid" style={{ maxWidth: 1100 }}>
-      <div style={{ marginBottom: 2 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>Actions &amp; Calls</h1>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Draft negotiation scripts with AI, place (dry-run) calls, and review the full audit trail.
-        </p>
+    <div className="grid" style={{ maxWidth: 1120 }}>
+      <div className="page-head">
+        <h1>Actions &amp; Calls</h1>
+        <p>Draft negotiation scripts with AI, place (dry-run) calls, and review the full audit trail.</p>
       </div>
 
-      <div className="card">
-        <div className="card-title">Draft a call script</div>
+      <div className="card card--violet">
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--violet)' }}>
+          <Sparkles size={13} aria-hidden />
+          Draft a call script
+        </div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
           <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-dim)' }}>
             Who are you calling?
@@ -246,7 +247,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
             <blockquote
               style={{
                 borderLeft: '3px solid var(--violet)',
-                background: 'var(--bg-raised)',
+                background: 'rgba(255,255,255,0.03)',
                 borderRadius: '0 8px 8px 0',
                 padding: '10px 14px',
                 fontStyle: 'italic',
@@ -281,7 +282,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
                       key={o.objection}
                       style={{
                         border: '1px solid var(--border)',
-                        background: 'var(--bg-raised)',
+                        background: 'rgba(255,255,255,0.03)',
                         borderRadius: 8,
                         padding: '10px 12px',
                         display: 'grid',
@@ -301,7 +302,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
             <blockquote
               style={{
                 borderLeft: '3px solid var(--accent)',
-                background: 'var(--bg-raised)',
+                background: 'rgba(255,255,255,0.03)',
                 borderRadius: '0 8px 8px 0',
                 padding: '10px 14px',
                 fontStyle: 'italic',
@@ -386,8 +387,8 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
         )}
       </div>
 
-      <div className="card">
-        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div className="card card--emerald">
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)' }}>
           <ShieldCheck size={13} aria-hidden />
           Safety model
         </div>

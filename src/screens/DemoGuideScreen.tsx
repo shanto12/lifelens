@@ -116,11 +116,9 @@ const TALK_TRACKS: { label: string; bullets: string[] }[] = [
 export default function DemoGuideScreen({ health, onNavigate }: ScreenProps) {
   return (
     <div className="grid" style={{ maxWidth: 1000 }}>
-      <div style={{ marginBottom: 2 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.01em' }}>Demo Guide</h1>
-        <p className="muted" style={{ fontSize: 13 }}>
-          Live system status, how it was built, and how to present it.
-        </p>
+      <div className="page-head">
+        <h1>Demo Guide</h1>
+        <p>Live system status, how it was built, and how to present it.</p>
       </div>
 
       {health === null ? (
