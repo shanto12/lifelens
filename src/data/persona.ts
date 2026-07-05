@@ -764,7 +764,7 @@ export const syntheticSnapshot: Snapshot = {
         keyPoints: 4,
       },
       status: 'done',
-      result: { savedScript: true, provider: 'glm-5.1' },
+      result: { savedScript: true, provider: 'glm-5.2' },
     },
     {
       id: 2,

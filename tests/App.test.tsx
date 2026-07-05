@@ -11,7 +11,7 @@ const healthPayload: HealthStatus = {
   mode: 'degraded',
   service: 'lifelens',
   version: '1.0.0',
-  model: 'glm-5.1',
+  model: 'glm-5.2',
   timestamp: '2026-07-01T00:00:00Z',
 }
 
@@ -85,7 +85,7 @@ describe('LifeLens shell', () => {
     const nav = await screen.findByRole('navigation', { name: /Primary/i })
     await user.click(within(nav).getByRole('button', { name: /Demo Guide/ }))
 
-    // The guide's env cheatsheet references the GLM provider (GLM_API_KEY / glm-5.1).
+    // The guide's env cheatsheet references the GLM provider (GLM_API_KEY / glm-5.2).
     const glmMentions = await screen.findAllByText(/GLM/i)
     expect(glmMentions.length).toBeGreaterThan(0)
   })

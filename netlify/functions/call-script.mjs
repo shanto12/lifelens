@@ -253,7 +253,7 @@ export default async (req) => {
 
   const glmKey = process.env.GLM_API_KEY || ''
   const glmBase = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')
-  const glmModel = process.env.GLM_MODEL || 'glm-5.1'
+  const glmModel = process.env.GLM_MODEL || 'glm-5.2'
   const xaiKey = process.env.XAI_API_KEY || ''
   const xaiModel = process.env.XAI_MODEL || 'grok-4'
 

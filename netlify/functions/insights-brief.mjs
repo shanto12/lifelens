@@ -235,7 +235,7 @@ export default async (req) => {
 
   const apiKey = process.env.GLM_API_KEY || ''
   const baseUrl = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')
-  const model = process.env.GLM_MODEL || 'glm-5.1'
+  const model = process.env.GLM_MODEL || 'glm-5.2'
 
   return sseResponse(async (send) => {
     if (!apiKey) {
