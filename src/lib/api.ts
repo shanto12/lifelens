@@ -70,13 +70,14 @@ export async function fetchSnapshot(): Promise<SnapshotResult> {
 
 export async function postAction(body: {
   kind: string
+  dryRun?: boolean
   target: string
   payload?: Record<string, unknown>
 }): Promise<{ ok: boolean; id?: number }> {
   try {
     const res = await fetch('/api/action', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders() },
+      headers: { 'content-type': 'application/json', ...(body.dryRun === true ? {} : authHeaders()) },
       body: JSON.stringify(body),
     })
     if (!res.ok) return { ok: false }
@@ -86,9 +87,9 @@ export async function postAction(body: {
   }
 }
 
-export async function fetchConnectors(): Promise<ConnectorsResponse | null> {
+export async function fetchConnectors(owner = false): Promise<ConnectorsResponse | null> {
   try {
-    const res = await fetch('/api/connectors', { headers: authHeaders() })
+    const res = await fetch('/api/connectors', { headers: owner ? authHeaders() : {} })
     if (!res.ok) return null
     return (await res.json()) as ConnectorsResponse
   } catch {
@@ -96,11 +97,11 @@ export async function fetchConnectors(): Promise<ConnectorsResponse | null> {
   }
 }
 
-export async function initiateConnection(toolkit: string): Promise<InitiateConnectionResult> {
+export async function initiateConnection(toolkit: string, owner = false): Promise<InitiateConnectionResult> {
   try {
     const res = await fetch('/api/connectors', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders() },
+      headers: { 'content-type': 'application/json', ...(owner ? authHeaders() : {}) },
       body: JSON.stringify({ toolkit }),
     })
     if (!res.ok) return { ok: false, status: 'error', note: `Request failed (${res.status})` }
@@ -141,7 +142,7 @@ export async function streamSse<TResult>(
   try {
     res = await fetch(path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders() },
+      headers: { 'content-type': 'application/json', ...(body.demo === true ? {} : authHeaders()) },
       body: JSON.stringify(body),
     })
   } catch {

@@ -140,3 +140,31 @@ describe('Owner session boundaries', () => {
     localStorage.clear()
   })
 })
+
+describe('Synthetic fallback isolation', () => {
+  it('clears saved owner credentials after snapshot failure and never attaches them to demo generation', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('lifelens.accessCode', 'saved-test-owner')
+    const requests: { url: string; init?: RequestInit }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requests.push({ url, init })
+      if (url.includes('/api/health')) return jsonResponse(healthPayload)
+      if (url.includes('/api/snapshot')) return { ok: false, status: 503 } as Response
+      if (url.includes('/api/call-script')) return new Response('event: done\ndata: {}\n\n', { headers: { 'content-type': 'text/event-stream' } })
+      return jsonResponse({})
+    }))
+    render(<App />)
+    expect(await screen.findByText('SYNTHETIC PERSONA')).toBeInTheDocument()
+    expect(localStorage.getItem('lifelens.accessCode')).toBeNull()
+    // Even a token introduced after fallback must not cross the sample boundary.
+    localStorage.setItem('lifelens.accessCode', 'saved-test-owner')
+    const nav = screen.getByRole('navigation', { name: /Primary/i })
+    await user.click(within(nav).getByRole('button', { name: 'Actions' }))
+    await user.click(screen.getByRole('button', { name: 'Draft script' }))
+    const generation = requests.find((request) => request.url.includes('/api/call-script'))
+    expect(generation).toBeDefined()
+    expect((generation?.init?.headers as Record<string, string>)['x-access-code']).toBeUndefined()
+    expect(JSON.parse(String(generation?.init?.body)).demo).toBe(true)
+  })
+})

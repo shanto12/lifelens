@@ -1,6 +1,6 @@
 # LifeLens — Data Provenance
 
-Two datasets can appear in the UI, and they never mix. The machine-readable
+The UI has separate public synthetic and authenticated owner modes. The machine-readable
 version of this document is `src/data/sources.ts` (`dataProvenance`).
 
 ## 1. Synthetic persona — "Jordan Rivera" (public demo)
@@ -32,8 +32,10 @@ version of this document is `src/data/sources.ts` (`dataProvenance`).
 - **Consent:** single-user tool — the owner reads only their own mailbox and
   calendar under their own Google authorization. No one else's inbox is ever
   accessed.
-- **Storage:** Supabase (Postgres) with deny-all row-level security. Only
-  Netlify Functions holding the service-role key can read it, server-side.
+- **Storage implementation:** Netlify Functions access Supabase PostgREST
+  with an anon API key plus the custom `x-lifelens-key` secret header.
+  Database policies and real private reads/writes were not verified in this
+  release; this document does not attest deployed row-level policies.
 - **Never in the repo:** owner data does not appear in this repository, in
   the client bundle, in build artifacts, or in the public demo. It is served
   only to a request carrying the correct access code, and labeled with the
@@ -48,6 +50,6 @@ to serve the owner's own relationship nudges.
 
 ## Retention & deletion
 
-Owner data lives in a single Supabase project controlled by the owner.
-Deleting the project (or truncating its tables) removes everything; there are
-no replicas, analytics sinks, or third-party mirrors.
+Database backup, replica, retention, and deletion behavior were not inspected.
+No complete-erasure or no-replica guarantee is made. Public release verification
+used synthetic data only, without private snapshot or database access.

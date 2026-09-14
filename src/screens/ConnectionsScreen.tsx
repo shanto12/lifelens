@@ -24,7 +24,7 @@ const CATEGORY_LABEL: Record<Connector['category'], string> = {
 }
 const CATEGORY_ORDER: Connector['category'][] = ['data', 'finance', 'productivity', 'social', 'dev']
 
-export default function ConnectionsScreen({ health }: ScreenProps) {
+export default function ConnectionsScreen({ health, snapshot }: ScreenProps) {
   const [connectors, setConnectors] = useState<Connector[] | null>(null)
   const [configured, setConfigured] = useState(false)
   const [owner, setOwner] = useState(false)
@@ -47,24 +47,24 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
 
   const refresh = useCallback(() => {
     setLoading(true)
-    void fetchConnectors().then(apply)
-  }, [apply])
+    void fetchConnectors(snapshot.mode === 'owner').then(apply)
+  }, [apply, snapshot.mode])
 
   useEffect(() => {
     let active = true
-    void fetchConnectors().then((res) => {
+    void fetchConnectors(snapshot.mode === 'owner').then((res) => {
       if (active) apply(res)
     })
     return () => {
       active = false
     }
-  }, [apply])
+  }, [apply, snapshot.mode])
 
   const connect = useCallback(async (c: Connector) => {
     if (!c.toolkit) return
     setBusy(c.id)
     setNote(null)
-    const res = await initiateConnection(c.toolkit)
+    const res = await initiateConnection(c.toolkit, snapshot.mode === 'owner')
     setBusy(null)
     if (res.ok && res.redirectUrl) {
       window.open(res.redirectUrl, '_blank', 'noopener,noreferrer')
@@ -72,7 +72,7 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
     } else {
       setNote({ id: c.id, text: res.note ?? 'Could not start the connection.' })
     }
-  }, [])
+  }, [snapshot.mode])
 
   const grouped = useMemo(() => {
     const list = connectors ?? []

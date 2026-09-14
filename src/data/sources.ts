@@ -16,7 +16,7 @@ export interface DataProvenance {
 }
 
 export const dataProvenance: DataProvenance = {
-  lastReviewed: '2026-07-01',
+  lastReviewed: '2026-09-14',
   entries: [
     {
       mode: 'synthetic',
@@ -38,7 +38,7 @@ export const dataProvenance: DataProvenance = {
       origin:
         'Derived from the owner’s own Gmail and Google Calendar via a consented ingestion workflow (MCP-driven, run by the owner). The ingestion parses receipts, bills, and calendar entries into the same Snapshot shape the UI renders.',
       storage:
-        'Stored in Supabase (Postgres) with deny-all row-level security; read server-side by Netlify Functions using the service-role key. Owner data never appears in this repository, in the client bundle, or in build artifacts.',
+        'Owner storage is accessed server-side through Supabase PostgREST using an anon API key and a custom secret header. Actual database policies, backups, and private records were not inspected during public-demo verification.',
       consent:
         'Single-user tool: the owner ingests only their own mailbox and calendar, under their own Google account authorization. No third party’s inbox is read.',
       notes: [

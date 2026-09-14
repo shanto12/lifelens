@@ -82,7 +82,7 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
 
     void streamSse<BriefResult>(
       '/api/insights-brief',
-      { summary },
+      { summary, demo: snapshot.mode === 'synthetic' },
       {
         onStart: (m) => setMeta(m),
         onDelta: (text) => setStreamText((prev) => prev + text),

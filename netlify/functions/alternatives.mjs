@@ -357,7 +357,7 @@ export default async (req) => {
   const cadence = coerceCadence(body.cadence)
   const annualCost = numOrNull(body.annualCost)
   const category = typeof body.category === 'string' ? body.category.slice(0, 40) : 'other'
-  const owner = isOwner(req)
+  const owner = isOwner(req) && body.demo !== true
 
   const apiKey = process.env.GLM_API_KEY || ''
   const baseUrl = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')

@@ -183,7 +183,7 @@ export default async (req) => {
     return json(400, { error: 'Missing required field: summary (object)' })
   }
   const summary = body.summary
-  const owner = isOwner(req)
+  const owner = isOwner(req) && body.demo !== true
 
   const apiKey = process.env.GLM_API_KEY || ''
   const baseUrl = (process.env.GLM_BASE_URL || 'https://api.z.ai/api/coding/paas/v4').replace(/\/+$/, '')

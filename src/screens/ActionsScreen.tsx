@@ -76,7 +76,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
 
     void streamSse<CallScriptResult>(
       '/api/call-script',
-      { target: target.trim(), goal: effectiveGoal, context: context.trim(), provider },
+      { target: target.trim(), goal: effectiveGoal, context: context.trim(), provider, demo: snapshot.mode === 'synthetic' },
       {
         onStart: (m) => setMeta(m),
         onDelta: (text) => setStreamText((prev) => prev + text),
@@ -95,7 +95,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
     setPlacing(true)
     setCallOutcome(null)
     try {
-      const code = getAccessCode()
+      const code = snapshot.mode === 'owner' ? getAccessCode() : ''
       const res = await fetch('/api/call-initiate', {
         method: 'POST',
         headers: {

@@ -140,6 +140,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
       '/api/alternatives',
       {
         merchant: sub.merchant,
+        demo: mode === 'synthetic',
         plan: sub.plan,
         amount: sub.amount,
         cadence: sub.cadence,
@@ -161,6 +162,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
     setAccepted((prev) => ({ ...prev, [name]: 'saving' }))
     const res = await postAction({
       kind: 'alternative_accepted',
+      dryRun: mode === 'synthetic',
       target: sub.merchant,
       payload: { suggestion: name, annualSavings },
     })

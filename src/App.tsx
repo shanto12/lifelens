@@ -70,8 +70,11 @@ export default function App() {
         setOwnerError(codeSubmitted ? 'bad_code' : null)
         setRefreshFailed(false)
         // Rejected or revoked access immediately removes any owner data.
+        setAccessCode('')
         setSnapshot(syntheticSnapshot)
       } else {
+        // Never retain credentials behind a synthetic fallback.
+        if (snapshotRef.current?.mode !== 'owner') setAccessCode('')
         // Network / server error.
         setOwnerError(codeSubmitted ? 'server' : null)
         if (snapshotRef.current) {

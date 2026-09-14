@@ -205,7 +205,7 @@ export default async (req) => {
   const target = body.target.trim().slice(0, 160)
   const goal = body.goal.trim().slice(0, 400)
   const context = typeof body.context === 'string' ? body.context.slice(0, 4000) : ''
-  const owner = isOwner(req)
+  const owner = isOwner(req) && body.demo !== true
   // Grok (xAI) is owner-only — force GLM for non-owner callers so the xAI key
   // is never spent on public traffic.
   const wantGrok = body.provider === 'grok' && owner

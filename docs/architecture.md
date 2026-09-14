@@ -15,12 +15,12 @@ research and narrative only.
                           │   (or manual script run)      │
                           └───────────────┬───────────────┘
                                           │ parsed rows (upsert,
-                                          │ service-role key)
+                                          │ server-side gate)
                                           ▼
                                  ┌─────────────────┐
-                                 │    Supabase     │  Postgres. RLS: deny-all
+                                 │    Supabase     │  PostgREST + secret gate
                                  │  (owner data)   │  to anon/authenticated —
-                                 └────────┬────────┘  only service role reads.
+                                 └────────┬────────┘  policies not reverified.
                                           │ server-side reads only
                                           ▼
               ┌───────────────────────────────────────────────────┐
@@ -74,7 +74,7 @@ configuration only, not successful live execution.
 | Mode | Source of truth | Path to the UI |
 | --- | --- | --- |
 | `synthetic` | `src/data/persona.ts` (fictional, in repo) | Bundled with the client; also what `/api/snapshot` implies via `{ bundled: true }` when no access code is presented |
-| `owner` | Supabase tables | `/api/snapshot` with `x-access-code` header → service-role read → JSON snapshot |
+| `owner` | Supabase tables | `/api/snapshot` with `x-access-code` header → gated PostgREST read → JSON snapshot |
 
 ## Manual private ingestion
 

@@ -74,6 +74,21 @@ describe('public isolation even when all server providers are configured', () =>
 })
 
 describe('deterministic public workflows', () => {
+  it('forces deterministic demo SSE even when an owner header remains present', async () => {
+    const headers = { 'x-access-code': 'fake-test-LIFELENS_ACCESS_CODE' }
+    const requests = [
+      [brief, post('insights-brief', { demo: true, summary: { totalTracked: 50 } }, headers)],
+      [script, post('call-script', { demo: true, target: 'Demo', goal: 'reduce bill', provider: 'grok' }, headers)],
+      [alternatives, post('alternatives', { demo: true, merchant: 'Netflix', annualCost: 240 }, headers)],
+    ] as const
+    for (const [handler, request] of requests) {
+      const events = await frames(await handler(request))
+      expect(events[0].data.model).toBe('deterministic')
+      expect(['rules', 'catalog']).toContain(events[0].data.provider)
+      expect(events.map((event) => event.event)).toEqual(['start', 'result', 'done'])
+    }
+    expect(fetch).not.toHaveBeenCalled()
+  })
   it('calculates a numeric brief and relationship nudges from synthetic input only', async () => {
     const events = await frames(await brief(post('insights-brief', { summary: {
       totalTracked: 1234.5,
