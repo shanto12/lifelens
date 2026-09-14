@@ -248,7 +248,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
           ) : (
             <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
               {upcomingEvents.map((e) => (
-                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div key={e.id} className="dashboard-event" style={{ display: 'grid', gridTemplateColumns: '86px minmax(0, 1fr) max-content', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span className="faint mono" style={{ fontSize: 11, width: 86, flexShrink: 0 }}>
                     {fmtDate(e.date)}
                   </span>
@@ -285,10 +285,10 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {latestInsights.map((i) => (
-                <div key={i.id}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                <div key={i.id} style={{ minWidth: 0 }}>
+                  <div className="dashboard-insight-heading" style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <span className={INSIGHT_CHIP[i.type]}>{titleCase(i.type)}</span>
-                    <span style={{ fontWeight: 600, fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span className="dashboard-insight-title" style={{ flex: 1, fontWeight: 600, fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {i.title}
                     </span>
                     {i.impactUsd !== null && (
