@@ -1,55 +1,7 @@
+import { json, isOwner, readJson, deterministicBrief } from './_shared/runtime.mjs'
+
 // POST /api/insights-brief — SSE. Personal-CFO daily brief from a client-computed
 // spend summary. Streams GLM output and emits a strict BriefResult JSON payload.
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-const PUBLIC_AI_DAILY_CAP = 200
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
-
-function supabaseEnv() {
-  const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
-  const key = process.env.SUPABASE_ANON_KEY || ''
-  const gate = process.env.SUPABASE_API_SECRET || ''
-  return url && key && gate ? { url, key, gate } : null
-}
-
-// Global daily AI-usage throttle for NON-OWNER callers. Fails open on any error
-// or when Supabase is unconfigured (local dev). Returns true when OVER the cap.
-async function overPublicAiCap() {
-  const env = supabaseEnv()
-  if (!env) return false // fail-open for local dev
-  try {
-    const res = await fetch(`${env.url}/rest/v1/rpc/bump_ai_usage_gated`, {
-      method: 'POST',
-      headers: {
-        apikey: env.key,
-        Authorization: `Bearer ${env.key}`,
-        'x-lifelens-key': env.gate,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    })
-    if (!res.ok) {
-      console.log('insights-brief: bump_ai_usage_gated failed', res.status)
-      return false // fail-open
-    }
-    const count = Number(await res.json())
-    return Number.isFinite(count) && count > PUBLIC_AI_DAILY_CAP
-  } catch (err) {
-    console.log('insights-brief: bump_ai_usage_gated error', err && err.message)
-    return false // fail-open
-  }
-}
 
 function sseResponse(run) {
   const encoder = new TextEncoder()
@@ -70,7 +22,7 @@ function sseResponse(run) {
         await run(send)
       } catch (err) {
         console.log('insights-brief stream error:', err && err.message)
-        send('error', { message: err && err.message ? String(err.message) : 'Unexpected error' })
+        send('error', { message: 'Unable to complete this request.' })
       } finally {
         send('done', {})
         clearInterval(heartbeat)
@@ -97,10 +49,10 @@ async function streamChat({ url, apiKey, body, onDelta }) {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
   })
   if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Upstream model error (${res.status}): ${text.slice(0, 200)}`)
+    throw new Error(`Upstream model error (${res.status})`)
   }
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -223,11 +175,11 @@ export default async (req) => {
 
   let body
   try {
-    body = await req.json()
+    body = await readJson(req)
   } catch {
     return json(400, { error: 'Invalid JSON body' })
   }
-  if (!body || typeof body !== 'object' || !body.summary || typeof body.summary !== 'object') {
+  if (!body || typeof body !== 'object' || !body.summary || typeof body.summary !== 'object' || Array.isArray(body.summary)) {
     return json(400, { error: 'Missing required field: summary (object)' })
   }
   const summary = body.summary
@@ -238,24 +190,20 @@ export default async (req) => {
   const model = process.env.GLM_MODEL || 'glm-5.2'
 
   return sseResponse(async (send) => {
-    if (!apiKey) {
-      send('error', { message: 'GLM is not configured — daily brief unavailable' })
-      return
+    const fallback = () => {
+      send('start', { provider: 'rules', model: 'deterministic' })
+      send('result', deterministicBrief(summary))
     }
-
-    // Throttle non-owner callers against a shared global daily budget.
-    if (!owner && (await overPublicAiCap())) {
-      send('error', {
-        message: 'Daily AI budget reached — try the owner mode or come back tomorrow.',
-      })
+    if (!owner || !apiKey) {
+      fallback()
       return
     }
 
     send('start', { provider: 'glm', model })
 
-    let content, finishReason, usage
+    let content
     try {
-      ;({ content, finishReason, usage } = await streamChat({
+      ;({ content } = await streamChat({
         url: `${baseUrl}/chat/completions`,
         apiKey,
         body: {
@@ -277,22 +225,18 @@ export default async (req) => {
     } catch (err) {
       // Do not leak upstream provider error bodies to the client.
       console.log('insights-brief upstream failed:', err && err.message)
-      send('error', { message: 'The AI provider request failed — please try again shortly.' })
+      fallback()
       return
     }
 
     if (!content.trim()) {
-      send('error', {
-        message: 'GLM returned empty content',
-        finish_reason: finishReason,
-        usage,
-      })
+      fallback()
       return
     }
 
     const brief = coerceBrief(extractJson(content))
     if (!brief) {
-      send('error', { message: 'Could not parse the model output into a brief' })
+      fallback()
       return
     }
 

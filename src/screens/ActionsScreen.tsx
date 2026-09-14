@@ -59,6 +59,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
   const [error, setError] = useState<string | null>(null)
 
   const [placing, setPlacing] = useState(false)
+  const [sessionActions, setSessionActions] = useState<ActionItem[]>([])
   const [callOutcome, setCallOutcome] = useState<CallOutcome | null>(null)
 
   const effectiveGoal = goal === 'custom' ? customGoal.trim() : goal
@@ -101,7 +102,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
           'content-type': 'application/json',
           ...(code ? { 'x-access-code': code } : {}),
         },
-        body: JSON.stringify({ target: script.target || target.trim(), script: flattenScript(script) }),
+        body: JSON.stringify({ target: script.target || target.trim(), script: flattenScript(script), dryRun: snapshot.mode === 'synthetic' }),
       })
       if (!res.ok) {
         setCallOutcome({ status: 'failed' })
@@ -114,6 +115,9 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
       }
       if (data.status === 'dry_run' || data.status === 'initiated') {
         setCallOutcome({ status: data.status, reason: data.reason, sid: data.sid })
+        if (data.status === 'dry_run') {
+          setSessionActions((previous) => [{ id: -Date.now(), createdAt: new Date().toISOString(), kind: 'call_initiated', target: script.target || target.trim(), payload: { simulation: true, goal: script.goal }, status: 'dry_run', result: { note: 'No call placed. This session only.' } }, ...previous])
+        }
       } else {
         setCallOutcome({ status: 'failed' })
       }
@@ -126,17 +130,17 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
 
   const audit = useMemo(
     () =>
-      [...snapshot.actions]
+      [...sessionActions, ...snapshot.actions]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .map((a) => ({ item: a, payload: JSON.stringify(a.payload) })),
-    [snapshot.actions],
+    [snapshot.actions, sessionActions],
   )
 
   return (
     <div className="grid" style={{ maxWidth: 1120 }}>
       <div className="page-head">
-        <h1>Actions &amp; Calls</h1>
-        <p>Draft negotiation scripts with AI, place (dry-run) calls, and review the full audit trail.</p>
+        <h1>Take the next step</h1>
+        <p>Prepare a negotiation script and rehearse a call. The public demo uses sample templates and never contacts anyone.</p>
       </div>
 
       <div className="card card--violet">
@@ -144,11 +148,12 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
           <Sparkles size={13} aria-hidden />
           Draft a call script
         </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))' }}>
           <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-dim)' }}>
             Who are you calling?
             <input
               type="text"
+              maxLength={160}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               placeholder="e.g. AT&T retention dept"
@@ -169,6 +174,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
               Custom goal
               <input
                 type="text"
+                maxLength={300}
                 value={customGoal}
                 onChange={(e) => setCustomGoal(e.target.value)}
                 placeholder="e.g. move to the grandfathered loyalty plan"
@@ -177,15 +183,17 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
           )}
         </div>
         <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-dim)', marginTop: 12 }}>
-          Context for the model
+          Context (optional)
           <textarea
             rows={3}
+            maxLength={3000}
             value={context}
             onChange={(e) => setContext(e.target.value)}
             placeholder="e.g. Fiber bill jumped from $65 to $89 after the promo expired; competitor offers $60; customer for 4 years, always on autopay."
           />
         </label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+          {snapshot.mode === 'owner' ? <>
           <span className="faint" style={{ fontSize: 12 }}>
             Script model:
           </span>
@@ -207,6 +215,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
               Grok
             </button>
           </span>
+          </> : <span className="chip chip--violet">Deterministic sample template</span>}
           <button className="btn btn--violet" onClick={draftScript} disabled={!canDraft} style={{ marginLeft: 'auto' }}>
             <Sparkles size={14} aria-hidden />
             {streaming ? 'Drafting…' : 'Draft script'}
@@ -225,7 +234,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
               streamText
             ) : (
               <span className="pulsing muted">
-                {meta ? `Streaming from ${meta.provider} (${meta.model})…` : 'Contacting model…'}
+                {meta?.model === 'deterministic' ? 'Preparing your sample script…' : meta ? `Generating via ${meta.provider}…` : 'Preparing script…'}
               </span>
             )}
           </div>
@@ -236,7 +245,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <span className="chip chip--violet">{titleCase(script.goal)}</span>
               <span className="chip chip--sky">{script.target}</span>
-              {meta && <span className="chip chip--dim mono">{meta.model}</span>}
+              {meta && <span className="chip chip--dim">{meta.model === 'deterministic' ? 'Deterministic sample' : `Live AI result · ${meta.provider}`}</span>}
               {script.estimatedSavingsUsd !== null && (
                 <span className="chip chip--accent">
                   Est. savings {fmtUsd(script.estimatedSavingsUsd, { compact: true })}
@@ -315,7 +324,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <button className="btn btn--primary" onClick={() => void placeCall()} disabled={placing}>
                 <PhoneCall size={14} aria-hidden />
-                {placing ? 'Placing call…' : 'Place call'}
+                {placing ? 'Processing…' : snapshot.mode === 'synthetic' ? 'Simulate call' : 'Place call'}
               </button>
               {callOutcome?.status === 'dry_run' && (
                 <span className="chip chip--amber" role="status">
@@ -335,7 +344,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
                 </span>
               )}
               <span className="faint" style={{ fontSize: 12 }}>
-                Calls only go to owner-configured numbers.
+                {snapshot.mode === 'synthetic' ? 'Simulation only. No call is placed and no account is changed.' : 'Calls only go to owner-configured numbers.'}
               </span>
             </div>
           </div>
@@ -343,7 +352,8 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
       </div>
 
       <div className="card">
-        <div className="card-title">Audit trail</div>
+        <div className="card-title">{snapshot.mode === 'synthetic' ? 'Demo activity' : 'Audit trail'}</div>
+        {snapshot.mode === 'synthetic' && <p className="faint" style={{ fontSize: 12, marginBottom: 12 }}>Includes fictional example records and simulations made on this screen. New simulations are temporary and clear when you leave this screen.</p>}
         {audit.length === 0 ? (
           <div className="empty-state">No actions logged yet.</div>
         ) : (
@@ -403,7 +413,7 @@ export default function ActionsScreen({ snapshot }: ScreenProps) {
             Without Twilio credentials the endpoint runs in dry-run mode and no call is made.
           </li>
           <li className="muted" style={{ fontSize: 13 }}>
-            Every action — drafts, calls, cancellations — is logged to the audit trail above.
+            Public actions are simulated. A prepared script or selected alternative never cancels a subscription or sends a message.
           </li>
         </ul>
       </div>

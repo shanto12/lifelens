@@ -108,23 +108,23 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
     <div className="grid" style={{ maxWidth: 1100 }}>
       <div className="page-head">
         <h1>Insights</h1>
-        <p>AI daily brief over your compact spend summary, plus the running insight ledger.</p>
+        <p>Turn the snapshot into a short list of priorities, with the calculation source shown alongside the result.</p>
       </div>
 
       <div className="card card--violet">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn--primary" onClick={generateBrief} disabled={streaming}>
             <Sparkles size={14} aria-hidden />
-            {streaming ? 'Generating…' : "Generate today's brief"}
+            {streaming ? 'Generating…' : 'Generate snapshot brief'}
           </button>
           {meta && (
             <>
-              <span className="chip chip--violet">{meta.provider}</span>
-              <span className="chip chip--dim mono">{meta.model}</span>
+              <span className="chip chip--violet">{meta.model === 'deterministic' ? 'Deterministic sample' : brief ? 'Live AI result' : 'AI request'}</span>
+              <span className="chip chip--dim mono">{meta.provider} · {meta.model}</span>
             </>
           )}
           <span className="faint" style={{ fontSize: 12 }}>
-            Sends only a compact aggregate summary — never raw emails.
+            {snapshot.mode === 'synthetic' ? 'Sample rules use the fictional snapshot. No live model is required.' : 'Sends a compact summary to the configured model — never raw emails.'}
           </span>
         </div>
 
@@ -144,7 +144,7 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
               streamText
             ) : (
               <span className="pulsing muted">
-                {meta ? `Streaming from ${meta.provider} (${meta.model})…` : 'Contacting model…'}
+                {meta?.model === 'deterministic' ? 'Calculating snapshot priorities…' : meta ? `Generating via ${meta.provider}…` : 'Preparing brief…'}
               </span>
             )}
           </div>
@@ -153,7 +153,7 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
         {brief && (
           <div style={{ marginTop: 16, display: 'grid', gap: 14 }}>
             <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>{brief.headline}</h2>
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))' }}>
               {brief.sections.map((section, i) => (
                 <div
                   key={i}
@@ -184,7 +184,7 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
                 <div className="stat-value pos">
                   {fmtUsd(brief.totalPotentialAnnualSavings, { compact: true })}
                 </div>
-                <div className="stat-label">Total potential annual savings identified</div>
+                <div className="stat-label">Estimated annual opportunity · verify offers before switching</div>
               </div>
             )}
           </div>
@@ -192,7 +192,7 @@ export default function InsightsScreen({ snapshot, analytics }: ScreenProps) {
       </div>
 
       <div className="card">
-        <div className="card-title">Insight ledger</div>
+        <div className="card-title">{snapshot.mode === 'synthetic' ? 'Sample insight ledger' : 'Insight ledger'}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
           {LEDGER_FILTERS.map((f) => (
             <button

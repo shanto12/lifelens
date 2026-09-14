@@ -28,11 +28,13 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
   const [connectors, setConnectors] = useState<Connector[] | null>(null)
   const [configured, setConfigured] = useState(false)
   const [owner, setOwner] = useState(false)
+  const [failed, setFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<{ id: string; text: string } | null>(null)
 
   const apply = useCallback((res: Awaited<ReturnType<typeof fetchConnectors>>) => {
+    setFailed(!res)
     if (res) {
       setConnectors(res.connectors)
       setConfigured(res.composioConfigured)
@@ -81,15 +83,14 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
   }, [connectors])
 
   const connectedCount = (connectors ?? []).filter((c) => c.status === 'connected').length
-  const composioLive = health?.capabilities.composio ?? configured
+  const composioConfigured = health?.capabilities.composio ?? configured
 
   return (
     <div className="grid" style={{ maxWidth: 1120 }}>
       <div className="page-head">
         <h1>Connections</h1>
         <p>
-          Let LifeLens reach more of your world. Each source connects through Composio&rsquo;s managed,
-          per-account OAuth — LifeLens never sees your passwords, and keys stay server-side.
+          Explore the integration catalog. Public visitors use synthetic data; linking real accounts is available only through verified owner access.
         </p>
       </div>
 
@@ -103,14 +104,14 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
             {connectedCount}
           </span>
           <span className="muted" style={{ fontSize: 13 }}>
-            sources connected · {(connectors ?? []).length} in the catalog
+            {owner ? 'sources marked connected' : 'public accounts connected'} · {(connectors ?? []).length} in the catalog
           </span>
           <span
-            className={composioLive ? 'chip chip--accent' : 'chip chip--dim'}
+            className={composioConfigured ? 'chip chip--accent' : 'chip chip--dim'}
             style={{ marginLeft: 'auto' }}
             role="status"
           >
-            {composioLive ? 'Composio: live' : 'Composio: preview mode'}
+            {composioConfigured ? 'OAuth: configured' : 'OAuth: not configured'}
           </span>
           <button className="btn btn--ghost" onClick={refresh} disabled={loading}>
             <RefreshCcw size={14} aria-hidden /> {loading ? 'Checking…' : 'Recheck'}
@@ -124,13 +125,14 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
             The agent requests only the toolkits it needs; new sources light up as they&rsquo;re enabled.
           </li>
           <li className="muted" style={{ fontSize: 13 }}>
-            {composioLive
-              ? 'Composio is configured — connect buttons start a real OAuth flow.'
-              : 'Add COMPOSIO_API_KEY server-side to turn on live connections. Until then this is a preview of the catalog.'}
+            {composioConfigured
+              ? 'OAuth is configured; owner access and provider authorization are still required to connect an account.'
+              : 'Live account linking is not configured. This catalog shows the supported and planned integrations.'}
           </li>
         </ul>
       </div>
 
+      {failed && <div className="card card--amber" role="status">Connector status could not be loaded. Use Recheck to try again.</div>}
       {loading && connectors === null ? (
         <div className="card empty-state">Loading connectors…</div>
       ) : (
@@ -139,7 +141,7 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
             <h2 className="card-title" style={{ marginBottom: 10 }}>
               {CATEGORY_LABEL[g.cat]}
             </h2>
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))' }}>
               {g.items.map((c) => {
                 const canConnect = owner && configured && c.status === 'available' && c.toolkit !== null
                 return (
@@ -162,7 +164,7 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
                     </div>
                     {c.status === 'connected' ? (
                       <span className="chip chip--accent" style={{ justifySelf: 'start' }}>
-                        <Check size={11} aria-hidden /> Feeding LifeLens
+                        <Check size={11} aria-hidden /> Connection reported
                       </span>
                     ) : c.status === 'planned' ? (
                       <span className="faint" style={{ fontSize: 12 }}>
@@ -183,7 +185,7 @@ export default function ConnectionsScreen({ health }: ScreenProps) {
                         }
                       >
                         <Plug size={14} aria-hidden />
-                        {busy === c.id ? 'Starting…' : 'Connect'}
+                        {busy === c.id ? 'Starting…' : !owner ? 'Owner access required' : !configured ? 'Not configured' : 'Connect'}
                         {canConnect && <ArrowUpRight size={13} aria-hidden />}
                       </button>
                     )}

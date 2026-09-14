@@ -182,7 +182,7 @@ export interface HealthStatus {
   ok: boolean
   service: string
   version: string
-  mode: 'live' | 'degraded'
+  mode: 'live' | 'degraded' | 'demo'
   capabilities: {
     glm: boolean
     grok: boolean

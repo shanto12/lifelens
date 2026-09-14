@@ -114,10 +114,24 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <div className="page-head">
-        <h1>Dashboard</h1>
-        <p>Your life &amp; money at a glance — spending, subscriptions, people, and what needs attention.</p>
+        <div className="eyebrow">Your personal picture, in focus</div>
+        <h1>Life, a little clearer.</h1>
+        <p>Spending, subscriptions, and people — brought together so the next step is easier to see.</p>
       </div>
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+      {snapshot.mode === 'synthetic' && (
+        <section className="demo-intro card card--emerald" aria-label="About this demo">
+          <div>
+            <span className="chip chip--accent">INTERACTIVE SAMPLE</span>
+            <h2>Meet Jordan. Find the small changes that add up.</h2>
+            <p>Explore a fictional household with {snapshot.subscriptions.length} subscriptions and {snapshot.people.length} people in its circle. Sample as of {new Date(generatedAt).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'long', day: 'numeric', year: 'numeric' })}.</p>
+          </div>
+          <div className="demo-intro__actions">
+            <button className="btn btn--primary" onClick={() => onNavigate('subscriptions')}>Find savings <ArrowRight size={15} aria-hidden /></button>
+            <button className="btn btn--ghost" onClick={() => onNavigate('guide')}>Take the tour</button>
+          </div>
+        </section>
+      )}
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))' }}>
         <StatCard
           icon={<Wallet size={15} />}
           accent="110,231,179"
@@ -161,7 +175,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
         </button>
       </div>
 
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 330px), 1fr))' }}>
         <div className="card card--emerald">
           <div className="card-title">Where the money goes</div>
           {topCategories.length === 0 ? (
@@ -197,7 +211,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
         </div>
 
         <div className="card card--amber">
-          <div className="card-title">Renewing soon</div>
+          <div className="card-title">Renewals after snapshot date</div>
           {renewingSoon.length === 0 ? (
             <div className="empty-state">No upcoming renewals detected.</div>
           ) : (
@@ -216,7 +230,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
                       {fmtUsd(s.amount)}
                     </span>
                     <span className={days <= 7 ? 'chip chip--amber' : 'chip chip--dim'}>
-                      {days === 0 ? 'today' : `in ${days}d`}
+                      {days === 0 ? 'reference day' : `+${days}d`}
                     </span>
                   </div>
                 )
@@ -226,7 +240,7 @@ export default function DashboardScreen({ snapshot, analytics, onNavigate }: Scr
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 330px), 1fr))' }}>
         <div className="card card--cyan">
           <div className="card-title">Life pulse</div>
           {upcomingEvents.length === 0 ? (

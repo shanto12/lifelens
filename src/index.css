@@ -476,3 +476,43 @@ a:focus-visible,
     padding: 16px;
   }
 }
+
+/* Public-demo introduction and compact walkthrough. */
+.eyebrow { color: var(--accent); font-size: 10px; text-transform: uppercase; letter-spacing: .16em; font-weight: 600; margin-bottom: 6px; }
+.page-head h1 { font-size: clamp(25px, 3vw, 36px); letter-spacing: -.045em; line-height: 1.2; }
+.demo-intro { display: flex; align-items: center; gap: 30px; padding: 24px; background: linear-gradient(115deg, rgba(110,231,179,.10), rgba(103,232,249,.035)); }
+.demo-intro h2 { font-size: clamp(18px, 2vw, 23px); letter-spacing: -.025em; font-weight: 500; margin: 12px 0 7px; }
+.demo-intro p { max-width: 70ch; color: var(--text-dim); font-size: 13px; }
+.demo-intro__actions { display: grid; gap: 6px; flex-shrink: 0; }
+.guide-steps { grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
+.guide-step { text-align: left; color: var(--text); display: flex; flex-direction: column; gap: 10px; transition: border-color .15s ease, background .15s ease; }
+.guide-step:hover { border-color: rgba(var(--accent-rgb), .5); background: rgba(var(--accent-rgb), .05); }
+.guide-step__number { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+.guide-step h2 { font-size: 17px; font-weight: 500; letter-spacing: -.015em; }
+.guide-step p { color: var(--text-dim); font-size: 13px; flex: 1; }
+.guide-step__link { color: var(--accent); display: flex; gap: 8px; align-items: center; font-size: 12px; margin-top: 6px; }
+.skip-link { position: fixed; left: 12px; top: -60px; z-index: 100; background: var(--bg-card); border: 1px solid var(--accent); padding: 12px; border-radius: 8px; }
+.skip-link:focus { top: 12px; }
+.grid > *, .card, .shell-main > * { min-width: 0; }
+.card-title svg { vertical-align: -2px; margin-right: 4px; }
+input, select, textarea { max-width: 100%; min-width: 0; }
+select option { background: var(--bg-card); color: var(--text); }
+.stream-box { overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  .shell { height: auto; min-height: 100dvh; }
+  .shell-body { min-height: 0; }
+  .shell-aside { flex-shrink: 0; padding: 8px; }
+  .shell-brand { display: none !important; }
+  .shell-nav { width: 100%; gap: 5px; }
+  .shell-nav button { min-width: 58px; flex-shrink: 0; }
+  .shell-header { padding: 12px 16px; gap: 8px; }
+  .shell-header-actions { width: 100%; flex-wrap: wrap; }
+  .shell-main { overflow-y: visible; }
+  .demo-intro { padding: 18px; align-items: flex-start; gap: 18px; flex-direction: column; }
+  .demo-intro__actions { display: flex; flex-wrap: wrap; }
+  .btn { min-height: 42px; }
+  button.chip { min-height: 36px; padding: 6px 12px; }
+  .card { padding: 16px; }
+  .table { min-width: 580px; }
+}

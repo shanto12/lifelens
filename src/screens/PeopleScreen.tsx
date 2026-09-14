@@ -182,7 +182,7 @@ export default function PeopleScreen({ snapshot }: ScreenProps) {
         {family.length === 0 ? (
           <div className="card empty-state">No family contacts detected in this snapshot.</div>
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))' }}>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 290px), 1fr))' }}>
             {family.map((p) => (
               <FamilyCard key={p.id} person={p} generatedAt={generatedAt} />
             ))}

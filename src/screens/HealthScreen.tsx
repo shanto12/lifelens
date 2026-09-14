@@ -147,7 +147,7 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
         <p>Wellbeing signals inferred from spending, food habits and calendar patterns.</p>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
         {FLAG_ORDER.map((kind) => {
           const meta = FLAG_META[kind]
           const Icon = meta.icon
@@ -188,7 +188,7 @@ export default function HealthScreen({ snapshot, analytics }: ScreenProps) {
         })}
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
         <div className="card card--cyan">
           <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Utensils size={13} aria-hidden />

@@ -1,55 +1,14 @@
+import { json, isOwner, readJson, deterministicScript } from './_shared/runtime.mjs'
+
 // POST /api/call-script — SSE. Generates a bill-negotiation/cancellation phone
 // script via GLM (or Grok when body.provider === 'grok' and XAI_API_KEY is set),
 // then best-effort logs an actions row for the owner.
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
 
 function supabaseEnv() {
   const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
   const key = process.env.SUPABASE_ANON_KEY || ''
   const gate = process.env.SUPABASE_API_SECRET || ''
   return url && key && gate ? { url, key, gate } : null
-}
-
-const PUBLIC_AI_DAILY_CAP = 200
-
-// Global daily AI-usage throttle for NON-OWNER callers. Fails open on any error
-// or when Supabase is unconfigured (local dev). Returns true when OVER the cap.
-async function overPublicAiCap() {
-  const env = supabaseEnv()
-  if (!env) return false // fail-open for local dev
-  try {
-    const res = await fetch(`${env.url}/rest/v1/rpc/bump_ai_usage_gated`, {
-      method: 'POST',
-      headers: {
-        apikey: env.key,
-        Authorization: `Bearer ${env.key}`,
-        'x-lifelens-key': env.gate,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    })
-    if (!res.ok) {
-      console.log('call-script: bump_ai_usage_gated failed', res.status)
-      return false // fail-open
-    }
-    const count = Number(await res.json())
-    return Number.isFinite(count) && count > PUBLIC_AI_DAILY_CAP
-  } catch (err) {
-    console.log('call-script: bump_ai_usage_gated error', err && err.message)
-    return false // fail-open
-  }
 }
 
 async function sbInsert(env, table, row) {
@@ -87,7 +46,7 @@ function sseResponse(run) {
         await run(send)
       } catch (err) {
         console.log('call-script stream error:', err && err.message)
-        send('error', { message: err && err.message ? String(err.message) : 'Unexpected error' })
+        send('error', { message: 'Unable to complete this request.' })
       } finally {
         send('done', {})
         clearInterval(heartbeat)
@@ -113,10 +72,10 @@ async function streamChat({ url, apiKey, body, onDelta }) {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
   })
   if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Upstream model error (${res.status}): ${text.slice(0, 200)}`)
+    throw new Error(`Upstream model error (${res.status})`)
   }
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -229,7 +188,7 @@ export default async (req) => {
 
   let body
   try {
-    body = await req.json()
+    body = await readJson(req)
   } catch {
     return json(400, { error: 'Invalid JSON body' })
   }
@@ -260,16 +219,12 @@ export default async (req) => {
   const useGrok = wantGrok && !!xaiKey
 
   return sseResponse(async (send) => {
-    if (!useGrok && !glmKey) {
-      send('error', { message: 'No LLM provider configured — call script unavailable' })
-      return
+    const fallback = () => {
+      send('start', { provider: 'rules', model: 'deterministic' })
+      send('result', deterministicScript(target, goal))
     }
-
-    // Throttle non-owner callers against a shared global daily budget.
-    if (!owner && (await overPublicAiCap())) {
-      send('error', {
-        message: 'Daily AI budget reached — try the owner mode or come back tomorrow.',
-      })
+    if (!owner || (!useGrok && !glmKey)) {
+      fallback()
       return
     }
 
@@ -322,9 +277,9 @@ export default async (req) => {
           ],
         }
 
-    let content, finishReason, usage
+    let content
     try {
-      ;({ content, finishReason, usage } = await streamChat({
+      ;({ content } = await streamChat({
         url: useGrok ? 'https://api.x.ai/v1/chat/completions' : `${glmBase}/chat/completions`,
         apiKey: useGrok ? xaiKey : glmKey,
         body: requestBody,
@@ -333,22 +288,18 @@ export default async (req) => {
     } catch (err) {
       // Do not leak upstream provider error bodies to the client.
       console.log('call-script upstream failed:', err && err.message)
-      send('error', { message: 'The AI provider request failed — please try again shortly.' })
+      fallback()
       return
     }
 
     if (!content.trim()) {
-      send('error', {
-        message: 'Model returned empty content',
-        finish_reason: finishReason,
-        usage,
-      })
+      fallback()
       return
     }
 
     const script = coerceCallScript(extractJson(content), goal, target)
     if (!script) {
-      send('error', { message: 'Could not parse the model output into a call script' })
+      fallback()
       return
     }
 

@@ -1,11 +1,6 @@
-// GET /api/health — service health + capability flags. No secrets echoed.
+import { json } from './_shared/runtime.mjs'
 
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
+// GET /api/health — service health + capability flags. No secrets echoed.
 
 export default async (req) => {
   try {
@@ -29,12 +24,15 @@ export default async (req) => {
       ok: true,
       service: 'lifelens',
       version: '1.0.0',
-      mode: glmKey ? 'live' : 'degraded',
+      mode: 'demo',
+      providerStatus: 'configuration_only_not_probed',
+      publicAi: 'deterministic',
+      privateRunner: 'authenticated_manual_only',
       capabilities: {
         glm: !!glmKey,
         grok: !!grokKey,
         supabase: !!(supabaseUrl && supabaseKey && supabaseGate),
-        twilio: !!(twilioSid && twilioToken && twilioFrom),
+        twilio: !!(twilioSid && twilioToken && twilioFrom && process.env.OWNER_PHONE_NUMBER),
         composio: !!composioKey,
         ownerMode: !!accessCode,
       },

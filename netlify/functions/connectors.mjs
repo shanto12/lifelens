@@ -1,3 +1,5 @@
+import { json, isOwner, readJson } from './_shared/runtime.mjs'
+
 // LifeLens connectors — the integrations layer.
 //
 // Lets LifeLens request access to more data sources (banking, more calendars,
@@ -15,10 +17,10 @@ const OWNER_USER_ID = process.env.COMPOSIO_USER_ID || 'lifelens-owner'
 
 // The curated catalog. `toolkit` is the Composio toolkit slug (null = planned/direct).
 const CATALOG = [
-  { id: 'gmail', name: 'Gmail', category: 'data', toolkit: 'gmail', status: 'connected',
+  { id: 'gmail', name: 'Gmail', category: 'data', toolkit: 'gmail', status: 'available',
     blurb: 'Receipts, order confirmations, renewal notices.',
     unlocks: 'The transaction + subscription feed that powers the whole app.' },
-  { id: 'googlecalendar', name: 'Google Calendar', category: 'data', toolkit: 'googlecalendar', status: 'connected',
+  { id: 'googlecalendar', name: 'Google Calendar', category: 'data', toolkit: 'googlecalendar', status: 'available',
     blurb: 'Events, recurring commitments, travel, birthdays.',
     unlocks: 'The Life Pulse timeline and people co-attendance signals.' },
   { id: 'plaid', name: 'Bank & cards (Plaid)', category: 'finance', toolkit: null, status: 'planned',
@@ -46,19 +48,6 @@ const CATALOG = [
     blurb: 'Itemized order history beyond the shipping emails.',
     unlocks: 'Category-accurate shopping spend and repeat-purchase detection.' },
 ]
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
 
 function composioKey() {
   return process.env.COMPOSIO_API_KEY || ''
@@ -118,11 +107,12 @@ export default async (req) => {
   if (req.method === 'POST') {
     let body = {}
     try {
-      body = await req.json()
+      body = await readJson(req)
     } catch {
       return json(400, { ok: false, status: 'error', note: 'Invalid JSON body' })
     }
-    const toolkit = String(body.toolkit || '').toLowerCase()
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { ok: false, status: 'error', note: 'Request body must be an object' })
+    const toolkit = typeof body.toolkit === 'string' ? body.toolkit.toLowerCase() : ''
     const entry = CATALOG.find((c) => c.toolkit === toolkit)
     if (!toolkit || !entry) return json(400, { ok: false, status: 'error', note: 'Unknown toolkit' })
 
@@ -182,8 +172,7 @@ export default async (req) => {
   }
 
   const connectors = CATALOG.map((c) => {
-    // Gmail/Calendar are already the app's ingestion source → always 'connected'.
-    // Others flip to 'connected' when Composio reports an active account.
+    // Only an authenticated live connector response can establish connection state.
     let status = c.status
     if (c.toolkit && liveConnected.has(c.toolkit)) status = 'connected'
     return { ...c, status }

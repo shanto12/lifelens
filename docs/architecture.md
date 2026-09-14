@@ -29,7 +29,7 @@ research and narrative only.
               │  health · snapshot · action                       │
               │  insights-brief · alternatives · call-script (SSE)│
               │  call-initiate (Twilio, owner-only, dry-run-able) │
-              │  ingest-run  (scheduled @daily, netlify.toml)     │
+              │  ingest-run  (authenticated manual only)        │
               └────────┬──────────────────┬──────────────┬────────┘
                        │ JSON + SSE       │ AI boundary  │ voice
                        ▼                  ▼              ▼
@@ -64,8 +64,10 @@ AI is only allowed on the other side of the boundary, for two jobs:
    call scripts (`/api/call-script`), streamed to the UI over SSE
    (`event: start | delta | result | error | done`).
 
-If every AI key is absent, `/api/health` reports `mode: "degraded"` and the
-app remains fully browsable — the deterministic screens lose nothing.
+Public requests always use deterministic rules/sample catalog responses over SSE,
+without provider or private database access. Owner-only narrative uses configured
+providers. `/api/health` reports `mode: "demo"`; capability flags indicate
+configuration only, not successful live execution.
 
 ## Data flow by mode
 
@@ -74,13 +76,11 @@ app remains fully browsable — the deterministic screens lose nothing.
 | `synthetic` | `src/data/persona.ts` (fictional, in repo) | Bundled with the client; also what `/api/snapshot` implies via `{ bundled: true }` when no access code is presented |
 | `owner` | Supabase tables | `/api/snapshot` with `x-access-code` header → service-role read → JSON snapshot |
 
-## Scheduled ingestion
+## Manual private ingestion
 
-`ingest-run` is declared in `netlify.toml` with `schedule = "@daily"`. Gmail
-OAuth is **not** wired into that function yet (see `docs/known-limits.md`), so
-the daily run is a placeholder/heartbeat; the real refresh happens when the
-owner runs the MCP ingestion workflow from a Claude session, which upserts
-into Supabase using the service-role key.
+`ingest-run` requires authenticated owner access. No body field substitutes for
+authorization, and this release disables its previous automatic schedule. Private
+MCP ingestion and database writes were not exercised during public verification.
 
 ## Key repo locations
 
@@ -90,4 +90,4 @@ into Supabase using the service-role key.
 - `src/screens/` — one component per sidebar destination
 - `src/data/persona.ts` — the synthetic persona
 - `netlify/functions/` — all server code
-- `netlify.toml` — redirects, CSP and security headers, scheduled function
+- `netlify.toml` — redirects, CSP and security headers, manual-only ingestion

@@ -145,7 +145,7 @@ export default function MoneyMapScreen({ snapshot, analytics }: ScreenProps) {
         )}
       </div>
 
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))' }}>
         <div className="card">
           <div className="card-title">Spend by category</div>
           {categories.length === 0 ? (
@@ -255,7 +255,7 @@ export default function MoneyMapScreen({ snapshot, analytics }: ScreenProps) {
         {accountGroups.length === 0 ? (
           <div className="empty-state">No accounts detected yet.</div>
         ) : (
-          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))' }}>
             {accountGroups.map((g) => (
               <div key={g.kind}>
                 <div className="stat-label" style={{ marginBottom: 6 }}>

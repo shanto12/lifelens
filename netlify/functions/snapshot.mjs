@@ -1,19 +1,8 @@
+import { json, isOwner } from './_shared/runtime.mjs'
+
 // GET /api/snapshot — serves the full Snapshot payload for the owner,
 // or a { mode: 'synthetic', bundled: true } marker for everyone else
 // (the client then falls back to its bundled synthetic persona).
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
 
 function supabaseEnv() {
   const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')

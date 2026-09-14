@@ -16,23 +16,19 @@ Treat totals as a **floor**, not a statement. The subscription detector is
 the strongest part of the pipeline because subscriptions are exactly the
 thing that reliably emails you every month.
 
-## 2. Gmail OAuth is not wired into the scheduled function
+## 2. Private ingestion is manual and unverified in this release
 
-`ingest-run` is scheduled `@daily` in `netlify.toml`, but it does not hold a
-Gmail OAuth grant. Today the daily refresh actually happens one of two ways:
+The automatic schedule is disabled. The private `ingest-run` endpoint requires
+owner credentials; a request body claiming to be scheduled grants no access.
+Gmail OAuth is not wired into this function. No private ingestion or database
+mutation was performed in the public portfolio verification.
 
-- the owner runs the MCP ingestion workflow from a Claude session, or
-- a manual script run with the owner's credentials.
+## 3. Owner access is a shared secret
 
-Until OAuth is embedded in the function, the schedule is a heartbeat, and
-owner-mode data is only as fresh as the last manual/assisted run.
+Owner mode is gated by one long random access code with a constant-time
+server-side comparison (implementation is in `netlify/functions/_shared/runtime.mjs`):
 
-## 3. Access code is a simple string compare
-
-Owner mode is gated by one long random access code compared server-side with
-a plain string comparison:
-
-- no rate limiting, no lockout, no constant-time comparison, no rotation UX;
+- no full identity provider, per-user sessions, account lockout, or rotation UX;
 - mitigated by keyspace size and by the response being indistinguishable from
   demo mode on failure (no oracle);
 - acceptable for a single-user personal tool, not a pattern to copy for
@@ -46,7 +42,7 @@ a plain string comparison:
 - **Closeness scores are interaction proxies.** They measure email/calendar
   frequency, not actual affection; a chatty newsletter-ish contact can
   outrank a beloved friend who prefers phone calls.
-- **AI outputs are suggestions.** Alternatives and call scripts can be stale
+- **Public outputs are deterministic sample suggestions.** Owner AI outputs and sample catalog prices can be stale
   or wrong on price; every money-moving step requires a human click, and the
   model has no tools or write access.
 - **Twilio calling is owner-only and default dry-run** in the demo; no real

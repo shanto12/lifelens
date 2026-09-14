@@ -1,55 +1,7 @@
+import { json, isOwner, readJson } from './_shared/runtime.mjs'
+
 // POST /api/alternatives — SSE. Finds cheaper/healthier real alternatives for a
 // subscription via GLM + web_search; falls back to an inline deterministic catalog.
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-const PUBLIC_AI_DAILY_CAP = 200
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
-
-function supabaseEnv() {
-  const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
-  const key = process.env.SUPABASE_ANON_KEY || ''
-  const gate = process.env.SUPABASE_API_SECRET || ''
-  return url && key && gate ? { url, key, gate } : null
-}
-
-// Global daily AI-usage throttle for NON-OWNER callers. Fails open on any error
-// or when Supabase is unconfigured (local dev). Returns true when OVER the cap.
-async function overPublicAiCap() {
-  const env = supabaseEnv()
-  if (!env) return false // fail-open for local dev
-  try {
-    const res = await fetch(`${env.url}/rest/v1/rpc/bump_ai_usage_gated`, {
-      method: 'POST',
-      headers: {
-        apikey: env.key,
-        Authorization: `Bearer ${env.key}`,
-        'x-lifelens-key': env.gate,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    })
-    if (!res.ok) {
-      console.log('alternatives: bump_ai_usage_gated failed', res.status)
-      return false // fail-open
-    }
-    const count = Number(await res.json())
-    return Number.isFinite(count) && count > PUBLIC_AI_DAILY_CAP
-  } catch (err) {
-    console.log('alternatives: bump_ai_usage_gated error', err && err.message)
-    return false // fail-open
-  }
-}
 
 // Keep a model-supplied url only when it parses AND is http(s). Otherwise null.
 function safeUrl(v) {
@@ -81,7 +33,7 @@ function sseResponse(run) {
         await run(send)
       } catch (err) {
         console.log('alternatives stream error:', err && err.message)
-        send('error', { message: err && err.message ? String(err.message) : 'Unexpected error' })
+        send('error', { message: 'Unable to complete this request.' })
       } finally {
         send('done', {})
         clearInterval(heartbeat)
@@ -107,10 +59,10 @@ async function streamChat({ url, apiKey, body, onDelta }) {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20000),
   })
   if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`Upstream model error (${res.status}): ${text.slice(0, 200)}`)
+    throw new Error(`Upstream model error (${res.status})`)
   }
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -323,7 +275,7 @@ const CATALOG = [
         name: 'Self-insure: cancel AppleCare+ and bank the premium',
         price: 0,
         cadence: 'monthly',
-        qualityNote: 'Setting the premium aside usually beats AppleCare+ unless you break devices often; repairs become pay-per-incident.',
+        qualityNote: 'Compare warranty coverage and repair costs before deciding whether to set aside the premium yourself.',
         healthNote: null,
         url: 'https://support.apple.com/repair',
       },
@@ -347,7 +299,13 @@ const CATALOG = [
 function catalogFallback({ merchant, annualCost }) {
   const m = (merchant || '').toLowerCase()
   const entry = CATALOG.find((c) => c.match.some((token) => m.includes(token.trim())))
-  const items = entry ? entry.items : []
+  const items = entry ? entry.items : [{
+    name: `Review a lower tier with ${merchant}`,
+    price: null, cadence: 'unknown', qualityNote: 'Compare features you actually use; request current terms directly from the provider.', healthNote: null, url: null,
+  }, {
+    name: 'Pause or cancel after reviewing your terms',
+    price: 0, cadence: 'monthly', qualityNote: 'Illustrative no-subscription scenario. Check cancellation fees, access loss, and any refund terms first.', healthNote: null, url: null,
+  }]
   const suggestions = items.map((it) => {
     const suggestionAnnual = annualOf(it.price, it.cadence)
     const annualSavings =
@@ -364,15 +322,14 @@ function catalogFallback({ merchant, annualCost }) {
       url: it.url,
     }
   })
-  const recommendation =
-    suggestions.length > 0
-      ? `Start with "${suggestions[0].name}" — the lowest-friction switch for ${merchant}. (catalog fallback)`
-      : `No catalog match for ${merchant}; retry when live AI search is available. (catalog fallback)`
+  const recommendation = `Illustrative catalog scenarios for ${merchant}. Prices and eligibility are not live-verified; confirm current terms before deciding.`
   return {
     merchant,
     currentAnnualCost: annualCost,
     suggestions,
     recommendation,
+    source: 'catalog',
+    pricesVerified: false,
   }
 }
 
@@ -383,7 +340,7 @@ export default async (req) => {
 
   let body
   try {
-    body = await req.json()
+    body = await readJson(req)
   } catch {
     return json(400, { error: 'Invalid JSON body' })
   }
@@ -391,6 +348,9 @@ export default async (req) => {
     return json(400, { error: 'Missing required field: merchant (string)' })
   }
 
+  if (['amount', 'annualCost'].some((key) => body[key] !== undefined && body[key] !== null && (typeof body[key] !== 'number' || !Number.isFinite(body[key]) || body[key] < 0 || body[key] > 1000000000))) {
+    return json(400, { error: 'amount and annualCost must be non-negative finite numbers when provided' })
+  }
   const merchant = body.merchant.trim().slice(0, 120)
   const plan = typeof body.plan === 'string' ? body.plan.slice(0, 120) : null
   const amount = numOrNull(body.amount)
@@ -404,19 +364,9 @@ export default async (req) => {
   const model = process.env.GLM_MODEL || 'glm-5.2'
 
   return sseResponse(async (send) => {
-    if (!apiKey) {
+    if (!owner || !apiKey) {
       send('start', { provider: 'catalog', model: 'deterministic' })
       send('result', catalogFallback({ merchant, annualCost }))
-      return
-    }
-
-    // Throttle non-owner callers: over the shared daily budget, serve the
-    // deterministic catalog fallback instead of spending on live AI search.
-    if (!owner && (await overPublicAiCap())) {
-      send('start', { provider: 'catalog', model: 'deterministic' })
-      const fallback = catalogFallback({ merchant, annualCost })
-      fallback.recommendation = `${fallback.recommendation} Daily AI budget reached — showing catalog suggestions.`
-      send('result', fallback)
       return
     }
 
@@ -493,6 +443,7 @@ export default async (req) => {
       return
     }
 
+    send('start', { provider: 'catalog', model: 'deterministic' })
     send('result', catalogFallback({ merchant, annualCost }))
   })
 }

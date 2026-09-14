@@ -2,7 +2,7 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { ReactNode } from 'react'
 import { Check, ChevronDown, ChevronRight, ExternalLink, PiggyBank, Repeat, Sparkles } from 'lucide-react'
 import type { ScreenProps } from '../lib/screen-props'
-import type { AlternativesResult, Cadence, Subscription, SubscriptionStatus } from '../lib/types'
+import type { AlternativesResult, Cadence, SnapshotMode, SseStartEvent, Subscription, SubscriptionStatus } from '../lib/types'
 import { daysBetween, fmtDate, fmtUsd, pct, titleCase } from '../lib/format'
 import { postAction, streamSse } from '../lib/api'
 import { detectRecurring, findCatalogAlternatives } from '../engine'
@@ -38,9 +38,10 @@ interface AiState {
   text: string
   result: AlternativesResult | null
   error: string | null
+  meta: SseStartEvent | null
 }
 
-const EMPTY_AI: AiState = { streaming: false, text: '', result: null, error: null }
+const EMPTY_AI: AiState = { streaming: false, text: '', result: null, error: null, meta: null }
 
 type AcceptStatus = 'saving' | 'ok' | 'fail'
 
@@ -66,7 +67,7 @@ function AltCard({ alt, action }: { alt: AltView; action?: ReactNode }) {
       </div>
       {alt.annualSavings !== null && alt.annualSavings > 0 && (
         <div className="pos" style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>
-          {fmtUsd(alt.annualSavings)}/yr saved
+          {fmtUsd(alt.annualSavings)}/yr potential
         </div>
       )}
       {alt.qualityNote && (
@@ -116,11 +117,13 @@ function StreamBox({ text, streaming, error }: { text: string; streaming: boolea
 const SubscriptionRow = memo(function SubscriptionRow({
   sub,
   generatedAt,
+  mode,
   isOpen,
   onToggle,
 }: {
   sub: Subscription
   generatedAt: string
+  mode: SnapshotMode
   isOpen: boolean
   onToggle: (id: number) => void
 }) {
@@ -132,7 +135,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
   const showStream = ai.streaming || ai.error !== null || (ai.result === null && ai.text !== '')
 
   const runResearch = () => {
-    setAi({ streaming: true, text: '', result: null, error: null })
+    setAi({ streaming: true, text: '', result: null, error: null, meta: null })
     void streamSse<AlternativesResult>(
       '/api/alternatives',
       {
@@ -145,7 +148,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
       },
       {
         onStart: (meta) =>
-          setAi((prev) => ({ ...prev, streaming: true, text: `Researching via ${meta.provider} · ${meta.model}…\n` })),
+          setAi((prev) => ({ ...prev, meta, streaming: true, text: meta.model === 'deterministic' ? 'Comparing sample catalog options…\n' : `Researching via ${meta.provider} · ${meta.model}…\n` })),
         onDelta: (text) => setAi((prev) => ({ ...prev, text: prev.text + text })),
         onResult: (result) => setAi((prev) => ({ ...prev, result })),
         onError: (message) => setAi((prev) => ({ ...prev, error: message })),
@@ -191,7 +194,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {fmtDate(sub.nextRenewal)}
               {renewDays !== null && renewDays >= 0 && renewDays <= 14 && (
-                <span className="chip chip--amber">{renewDays === 0 ? 'today' : `in ${renewDays}d`}</span>
+                <span className="chip chip--amber">{renewDays === 0 ? 'reference day' : `+${renewDays}d`}</span>
               )}
             </span>
           )}
@@ -218,14 +221,14 @@ const SubscriptionRow = memo(function SubscriptionRow({
 
               <div>
                 <div className="stat-label" style={{ marginBottom: 8 }}>
-                  Catalog alternatives
+                  Catalog alternatives · illustrative prices
                 </div>
                 {catalogAlts.length === 0 ? (
                   <div className="faint" style={{ fontSize: 12 }}>
                     No catalog alternatives for this merchant.
                   </div>
                 ) : (
-                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))' }}>
                     {catalogAlts.map((alt) => (
                       <AltCard
                         key={alt.name}
@@ -245,14 +248,15 @@ const SubscriptionRow = memo(function SubscriptionRow({
               </div>
 
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  <span className="stat-label">Live research</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span className="stat-label">{mode === 'synthetic' ? 'Sample comparison' : 'AI research'}</span>
                   <button className="btn btn--violet" disabled={ai.streaming} onClick={runResearch}>
                     <Sparkles size={14} />
-                    {ai.streaming ? 'Researching…' : 'Research live alternatives (AI)'}
+                    {ai.streaming ? 'Comparing…' : mode === 'synthetic' ? 'Compare sample alternatives' : 'Research live alternatives (AI)'}
                   </button>
                 </div>
 
+                {ai.meta && <div style={{ marginBottom: 10 }}><span className="chip chip--violet">{ai.meta.model === 'deterministic' ? 'Deterministic catalog · sample prices' : ai.result ? 'Live AI result · verify offers' : 'AI request'}</span></div>}
                 {showStream && <StreamBox text={ai.text} streaming={ai.streaming} error={ai.error} />}
 
                 {ai.result && (
@@ -262,7 +266,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
                         The model found no better alternatives.
                       </div>
                     ) : (
-                      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 240px), 1fr))' }}>
                         {ai.result.suggestions.map((s) => {
                           const status = accepted[s.name]
                           return (
@@ -286,14 +290,14 @@ const SubscriptionRow = memo(function SubscriptionRow({
                                 >
                                   {status === 'ok' ? (
                                     <>
-                                      <Check size={13} /> Accepted
+                                      <Check size={13} /> {mode === 'synthetic' ? 'Selected for demo' : 'Recorded'}
                                     </>
                                   ) : status === 'saving' ? (
                                     'Saving…'
                                   ) : status === 'fail' ? (
-                                    'Retry accept'
+                                    'Retry selection'
                                   ) : (
-                                    'Accept'
+                                    'Select option'
                                   )}
                                 </button>
                               }
@@ -371,7 +375,8 @@ export default function SubscriptionsScreen({ snapshot, analytics }: ScreenProps
 
   return (
     <div style={{ display: 'grid', gap: 14 }}>
-      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+      <div className="page-head"><h1>Subscriptions</h1><p>Spot recurring costs and compare sample alternatives. Selecting an option records a demo choice; it does not change a subscription.</p></div>
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))' }}>
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: 'var(--sky)' }}>
             <Repeat size={15} />
@@ -443,6 +448,7 @@ export default function SubscriptionsScreen({ snapshot, analytics }: ScreenProps
                     key={sub.id}
                     sub={sub}
                     generatedAt={generatedAt}
+                    mode={snapshot.mode}
                     isOpen={expandedId === sub.id}
                     onToggle={handleToggle}
                   />

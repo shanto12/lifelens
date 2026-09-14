@@ -6,8 +6,7 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-[functions."ingest-run"]
-  schedule = "@daily"
+# Private ingestion is authenticated manual-only; no scheduled private-data jobs.
 
 [[redirects]]
   from = "/api/health"

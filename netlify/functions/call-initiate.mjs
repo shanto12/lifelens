@@ -1,18 +1,7 @@
+import { json, isOwner, readJson } from './_shared/runtime.mjs'
+
 // POST /api/call-initiate — places a real Twilio call reading the script aloud
 // (owner + full Twilio env only); otherwise returns a dry-run result.
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
 
 function supabaseEnv() {
   const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
@@ -64,7 +53,7 @@ export default async (req) => {
 
     let body
     try {
-      body = await req.json()
+      body = await readJson(req)
     } catch {
       return json(400, { error: 'Invalid JSON body' })
     }
@@ -96,7 +85,7 @@ export default async (req) => {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
-    if (to && allowed.length > 0 && !allowed.includes(to)) {
+    if (isOwner(req) && to && allowed.length > 0 && !allowed.includes(to)) {
       return json(403, { error: 'destination not allowed' })
     }
 
@@ -109,7 +98,7 @@ export default async (req) => {
     // request-supplied destination. body.to is echoed only in the dry-run.
     const twilioReady = !!(sid && token && from && ownerNumber)
 
-    if (twilioReady && owner) {
+    if (twilioReady && owner && body.dryRun !== true) {
       const params = new URLSearchParams()
       params.set('To', ownerNumber)
       params.set('From', from)
@@ -149,8 +138,8 @@ export default async (req) => {
     }
 
     // Dry-run path: no call placed.
-    const reason = !owner ? 'not_owner' : 'twilio_unconfigured'
-    await logAction(owner, {
+    const reason = !owner ? 'not_owner' : body.dryRun === true ? 'requested_preview' : 'twilio_unconfigured'
+    await logAction(owner && body.dryRun !== true, {
       kind: 'call_initiated',
       target,
       payload: { scriptChars: script.length, dryRun: true },
@@ -165,7 +154,7 @@ export default async (req) => {
       note:
         reason === 'not_owner'
           ? 'Owner mode required to place a real call — no call placed'
-          : 'Twilio env not configured — no call placed',
+          : reason === 'requested_preview' ? 'Preview requested — no call placed' : 'Twilio env not configured — no call placed',
     })
   } catch (err) {
     console.log('call-initiate error:', err && err.message)

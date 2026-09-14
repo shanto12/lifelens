@@ -27,7 +27,7 @@ const NAV: { id: ScreenId; label: string; icon: ReactNode; accent: string }[] = 
   { id: 'health', label: 'Health', icon: <HeartPulse size={20} />, accent: '251,113,133' },
   { id: 'insights', label: 'Insights', icon: <Sparkles size={20} />, accent: '167,139,250' },
   { id: 'actions', label: 'Actions', icon: <PhoneCall size={20} />, accent: '251,191,36' },
-  { id: 'connections', label: 'Connect', icon: <Plug size={20} />, accent: '167,139,250' },
+  { id: 'connections', label: 'Sources', icon: <Plug size={20} />, accent: '167,139,250' },
   { id: 'guide', label: 'Guide', icon: <BookOpen size={20} />, accent: '103,232,249' },
 ]
 
@@ -35,6 +35,7 @@ interface ShellProps {
   active: ScreenId
   onNavigate: (s: ScreenId) => void
   mode: SnapshotMode
+  snapshotDate?: string
   onUnlock: (code: string) => void
   onRefresh: () => void
   refreshing: boolean
@@ -49,6 +50,7 @@ export default function Shell({
   active,
   onNavigate,
   mode,
+  snapshotDate,
   onUnlock,
   onRefresh,
   refreshing,
@@ -58,6 +60,7 @@ export default function Shell({
   hasAccessCode,
   children,
 }: ShellProps) {
+  const referenceDate = snapshotDate ? new Date(snapshotDate).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' }) : 'July 1, 2026'
   const [showUnlock, setShowUnlock] = useState(false)
   const [code, setCode] = useState('')
 
@@ -86,6 +89,7 @@ export default function Shell({
 
   return (
     <div className="shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <div className="app-atmosphere" aria-hidden="true">
         <div className="app-glow app-glow--1" />
         <div className="app-glow app-glow--2" />
@@ -163,9 +167,9 @@ export default function Shell({
           <span className="faint" style={{ fontSize: 12, minWidth: 0 }}>
             {mode === 'owner'
               ? 'Showing your real snapshot (access-code verified, served server-side).'
-              : 'Showing a synthetic demo persona. Unlock with your access code to see real data.'}
+              : `Fictional persona · ${referenceDate} snapshot. Relative dates use this reference.`}
           </span>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="shell-header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
             {refreshFailed && (
               <span className="chip chip--amber" role="status">
                 Refresh failed — showing last data
@@ -189,6 +193,7 @@ export default function Shell({
                 <span style={{ display: 'inline-flex', gap: 6 }}>
                   <input
                     type="password"
+                    autoComplete="current-password"
                     placeholder="Access code"
                     value={code}
                     autoFocus
@@ -204,7 +209,7 @@ export default function Shell({
                     aria-invalid={ownerError !== null}
                     style={{ width: 150 }}
                   />
-                  <button className="btn btn--primary" onClick={submitCode} disabled={refreshing}>
+                  <button className="btn btn--primary" onClick={submitCode} disabled={refreshing || !code.trim()}>
                     Unlock
                   </button>
                   <button className="btn btn--ghost" onClick={cancelUnlock} aria-label="Cancel unlock">
@@ -233,7 +238,7 @@ export default function Shell({
             )}
           </div>
         </header>
-        <main className="shell-main">{children}</main>
+        <main id="main-content" className="shell-main">{children}</main>
       </div>
     </div>
   )

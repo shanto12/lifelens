@@ -39,6 +39,7 @@ export default function App() {
   const [refreshFailed, setRefreshFailed] = useState(false)
   // Guards against overlapping loads clobbering each other's results.
   const inFlight = useRef(false)
+  const requestGeneration = useRef(0)
   // Mirror of the latest snapshot so load() can branch on prior data without
   // nesting a setState inside a state updater (which StrictMode may double-run).
   const snapshotRef = useRef<Snapshot | null>(null)
@@ -54,9 +55,11 @@ export default function App() {
   const load = useCallback(async (codeSubmitted = false) => {
     if (inFlight.current) return
     inFlight.current = true
+    const generation = ++requestGeneration.current
     setRefreshing(true)
     try {
       const [result, hl] = await Promise.all([fetchSnapshot(), fetchHealth()])
+      if (generation !== requestGeneration.current) return
       setHealth(hl)
       if (result.kind === 'owner') {
         setSnapshot(result.snapshot)
@@ -66,9 +69,8 @@ export default function App() {
         // A submitted code that resolves to bundled means the code was rejected.
         setOwnerError(codeSubmitted ? 'bad_code' : null)
         setRefreshFailed(false)
-        // First load with no prior data → show the bundled synthetic persona.
-        // Never demote an already-unlocked owner snapshot back to synthetic.
-        if (!snapshotRef.current) setSnapshot(syntheticSnapshot)
+        // Rejected or revoked access immediately removes any owner data.
+        setSnapshot(syntheticSnapshot)
       } else {
         // Network / server error.
         setOwnerError(codeSubmitted ? 'server' : null)
@@ -81,9 +83,11 @@ export default function App() {
         }
       }
     } finally {
-      inFlight.current = false
-      setRefreshing(false)
-      setLoading(false)
+      if (generation === requestGeneration.current) {
+        inFlight.current = false
+        setRefreshing(false)
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -104,6 +108,9 @@ export default function App() {
       } else {
         // Explicit lock-out: clear the code and reload as the bundled persona.
         setAccessCode('')
+        ++requestGeneration.current
+        inFlight.current = false
+        snapshotRef.current = syntheticSnapshot
         setSnapshot(syntheticSnapshot)
         setOwnerError(null)
         setRefreshFailed(false)
@@ -136,6 +143,7 @@ export default function App() {
       active={screen}
       onNavigate={setScreen}
       mode={snap.mode}
+      snapshotDate={snap.generatedAt}
       onUnlock={handleUnlock}
       onRefresh={refresh}
       refreshing={refreshing}
@@ -145,6 +153,7 @@ export default function App() {
       hasAccessCode={getAccessCode().length > 0}
     >
       <Active
+        key={snap.mode}
         snapshot={snap}
         analytics={analytics}
         health={health}

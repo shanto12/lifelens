@@ -1,17 +1,6 @@
+import { json, isOwner, readJson } from './_shared/runtime.mjs'
+
 // POST /api/action — records a user action row for the owner; dry-run otherwise.
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
-}
 
 function supabaseEnv() {
   const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
@@ -30,7 +19,7 @@ export default async (req) => {
 
     let body
     try {
-      body = await req.json()
+      body = await readJson(req)
     } catch {
       return json(400, { error: 'Invalid JSON body' })
     }
@@ -52,7 +41,7 @@ export default async (req) => {
     const payload = body.payload || {}
 
     const env = supabaseEnv()
-    if (!isOwner(req) || !env) {
+    if (!isOwner(req) || !env || body.dryRun === true) {
       // Visitors (and owner without a database) get a harmless dry-run — nothing is written.
       return json(200, { ok: true, dryRun: true })
     }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../src/App'
 import { syntheticSnapshot } from '../src/data/persona'
@@ -24,6 +24,13 @@ function jsonResponse(body: unknown): Response {
 }
 
 beforeEach(() => {
+  const storage = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
+    clear: () => storage.clear(),
+  })
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -81,5 +88,55 @@ describe('LifeLens shell', () => {
     // The guide's env cheatsheet references the GLM provider (GLM_API_KEY / glm-5.2).
     const glmMentions = await screen.findAllByText(/GLM/i)
     expect(glmMentions.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Owner session boundaries', () => {
+  it('keeps the demo locked when an earlier owner refresh finishes after locking', async () => {
+    const user = userEvent.setup()
+    let releaseRefresh: ((response: Response) => void) | undefined
+    let ownerRequests = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('/api/health')) return jsonResponse(healthPayload)
+      const code = (init?.headers as Record<string, string>)?.['x-access-code']
+      if (code === 'test-only-owner') {
+        ownerRequests++
+        if (ownerRequests > 1) return new Promise<Response>((resolve) => { releaseRefresh = resolve })
+        return jsonResponse({ ...syntheticSnapshot, mode: 'owner' })
+      }
+      return jsonResponse({ mode: 'synthetic', bundled: true })
+    }))
+    render(<App />)
+    await user.click(await screen.findByTestId('owner-unlock'))
+    await user.type(screen.getByLabelText('Access code'), 'test-only-owner')
+    await user.click(screen.getByRole('button', { name: /^Unlock$/ }))
+    expect(await screen.findByText('OWNER DATA')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Refresh data' }))
+    await user.click(screen.getByRole('button', { name: /^Lock$/ }))
+    await act(async () => { releaseRefresh?.(jsonResponse({ ...syntheticSnapshot, mode: 'owner' })) })
+    expect(await screen.findByText('SYNTHETIC PERSONA')).toBeInTheDocument()
+    expect(screen.queryByText('OWNER DATA')).not.toBeInTheDocument()
+  })
+
+  it('removes owner data when refreshed credentials are rejected', async () => {
+    const user = userEvent.setup()
+    let accepted = true
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/api/health')) return jsonResponse(healthPayload)
+      const code = (init?.headers as Record<string, string>)?.['x-access-code']
+      return jsonResponse(code === 'test-only-owner' && accepted
+        ? { ...syntheticSnapshot, mode: 'owner' }
+        : { mode: 'synthetic', bundled: true })
+    }))
+    render(<App />)
+    await user.click(await screen.findByTestId('owner-unlock'))
+    await user.type(screen.getByLabelText('Access code'), 'test-only-owner')
+    await user.click(screen.getByRole('button', { name: /^Unlock$/ }))
+    expect(await screen.findByText('OWNER DATA')).toBeInTheDocument()
+    accepted = false
+    await user.click(screen.getByRole('button', { name: 'Refresh data' }))
+    expect(await screen.findByText('SYNTHETIC PERSONA')).toBeInTheDocument()
+    localStorage.clear()
   })
 })

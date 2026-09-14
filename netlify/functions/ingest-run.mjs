@@ -1,26 +1,15 @@
-// ingest-run — scheduled daily (schedule lives in netlify.toml) and manually
-// POSTable. Purely deterministic insight generation: renewal alerts, category
+import { json, isOwner, matchesSecret } from './_shared/runtime.mjs'
+
+// ingest-run — authenticated manual POST only. Automatic ingestion is disabled
+// for the public portfolio demo. Purely deterministic insight generation: renewal alerts, category
 // spend jumps, subscription-cost snapshot, and consolidation opportunities.
 // No LLM calls — must finish well inside the 30s cap.
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  })
-}
 
 function supabaseEnv() {
   const url = (process.env.SUPABASE_URL || '').replace(/\/+$/, '')
   const key = process.env.SUPABASE_ANON_KEY || ''
   const gate = process.env.SUPABASE_API_SECRET || ''
   return url && key && gate ? { url, key, gate } : null
-}
-
-function isOwner(req) {
-  const code = process.env.LIFELENS_ACCESS_CODE || ''
-  if (!code) return false
-  return (req.headers.get('x-access-code') || '') === code
 }
 
 async function sbSelect(env, pathAndQuery) {
@@ -109,25 +98,14 @@ export default async (req) => {
   console.log('ingest-run: start', startedAt)
 
   try {
-    if (req.method !== 'POST' && req.method !== 'GET') {
+    if (req.method !== 'POST') {
       return json(405, { error: 'Method not allowed' })
     }
 
-    // Read the body ONCE (scheduled invocations POST JSON with a next_run field).
-    let parsedBody = null
-    try {
-      const raw = await req.text()
-      parsedBody = raw ? JSON.parse(raw) : null
-    } catch {
-      parsedBody = null
-    }
-    const isScheduled = !!(parsedBody && typeof parsedBody === 'object' && parsedBody.next_run)
-
-    // Gate HTTP invocations: allow only scheduled runs, the owner, or the shared
-    // ingest secret. Everyone else is forbidden.
+    // Scheduler-shaped JSON is untrusted. Every invocation must authenticate.
     const secret = process.env.SUPABASE_API_SECRET || ''
-    const hasSecret = !!secret && (req.headers.get('x-ingest-secret') || '') === secret
-    if (!isScheduled && !isOwner(req) && !hasSecret) {
+    const hasSecret = matchesSecret(req.headers.get('x-ingest-secret') || '', secret)
+    if (!isOwner(req) && !hasSecret) {
       return json(403, { error: 'forbidden' })
     }
 
