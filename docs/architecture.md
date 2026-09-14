@@ -1,93 +1,63 @@
-# LifeLens — Architecture
+# LifeLens architecture and data model
 
-LifeLens is a single-user "life & money copilot": a Vite/React SPA served by
-Netlify, a set of Netlify Functions behind `/api/*`, Supabase as the only data
-store for real (owner) data, and a hard AI boundary where GLM/Grok are used for
-research and narrative only.
+[Project overview](../README.md) · [Verification](VERIFICATION-2026-09-14.md)
 
-## System diagram
+The public application is a **deterministic demonstration**. The repository also implements owner-only database and optional AI paths, which have a different verification boundary.
 
-```
-                          ┌──────────────────────────────┐
-   Gmail / Calendar       │   Ingestion workflow          │
-   (owner's own data) ───▶│   Gmail + Calendar MCP tools, │
-   OAuth'd MCP access     │   run in a Claude session     │
-                          │   (or manual script run)      │
-                          └───────────────┬───────────────┘
-                                          │ parsed rows (upsert,
-                                          │ server-side gate)
-                                          ▼
-                                 ┌─────────────────┐
-                                 │    Supabase     │  PostgREST + secret gate
-                                 │  (owner data)   │  to anon/authenticated —
-                                 └────────┬────────┘  policies not reverified.
-                                          │ server-side reads only
-                                          ▼
-              ┌───────────────────────────────────────────────────┐
-              │        Netlify Functions  (/api/* redirects)      │
-              │                                                   │
-              │  health · snapshot · action                       │
-              │  insights-brief · alternatives · call-script (SSE)│
-              │  call-initiate (Twilio, owner-only, dry-run-able) │
-              │  ingest-run  (authenticated manual only)        │
-              └────────┬──────────────────┬──────────────┬────────┘
-                       │ JSON + SSE       │ AI boundary  │ voice
-                       ▼                  ▼              ▼
-              ┌─────────────────┐  ┌──────────────┐  ┌────────────┐
-              │    React UI     │  │  GLM (Z.ai)  │  │   Twilio   │
-              │ Vite SPA, dark  │  │  Grok (xAI)  │  │ owner-only │
-              │ enterprise UI   │  │  narrative + │  │  numbers   │
-              │ + bundled       │  │  research    │  └────────────┘
-              │ synthetic       │  │  ONLY        │
-              │ persona         │  └──────────────┘
-              └─────────────────┘
+```mermaid
+flowchart TD
+  Browser[React and TypeScript UI] --> Snapshot[Netlify snapshot function]
+  Snapshot --> Public[Public: bundled fictional persona]
+  Public --> Engine[Deterministic analysis in src/engine]
+  Engine --> Screens[Nine public views]
+  Browser --> SSE[Validated SSE functions]
+  SSE --> Rules[Public: rules and sample catalog]
+  Snapshot --> Gate[Owner access-code gate]
+  Gate --> Adapter[Server-side PostgREST adapter]
+  Adapter --> DB[(Configured Supabase database)]
+  SSE --> Owner[Owner-only provider path]
+  Owner --> Models[Configured GLM or Grok]
 ```
 
-## The deterministic core
+Solid arrows describe implemented routes, not a claim that every private dependency was exercised. The public portfolio pass used no private database, owner snapshot or paid LifeLens model request.
 
-The heavy lifting is deterministic, on purpose:
+## Database integration: implemented versus verified
 
-- **Parsing** — receipts, bills, and calendar entries are turned into typed
-  rows (`Transaction`, `Subscription`, `LifeEvent`, `Person`, …) by ordinary
-  code during ingestion, not by a model.
-- **Recurrence & subscription detection** — cadence, next-renewal projection,
-  and detector confidence are computed from charge history.
-- **Scoring & analytics** — closeness scores, staleness nudges, category and
-  merchant rollups (`SpendAnalytics`) are computed client-side in
-  `src/engine` from the snapshot. Same input, same output, every time.
+[`snapshot.mjs`](../netlify/functions/snapshot.mjs) checks `isOwner(req)` before reading Supabase. Public requests return `{ "mode": "synthetic", "bundled": true }`, and the browser uses [`src/data/persona.ts`](../src/data/persona.ts).
 
-AI is only allowed on the other side of the boundary, for two jobs:
+The server adapter calls `${SUPABASE_URL}/rest/v1/...` with `apikey` and Bearer headers derived from `SUPABASE_ANON_KEY`, plus the custom `x-lifelens-key` header from `SUPABASE_API_SECRET`. This is **not service-role authentication**. A custom header alone does not prove database enforcement: the deployed policies and their SQL must be inspected separately.
 
-1. **Research** — alternative suggestions (`/api/alternatives`) where a model
-   proposes cheaper/better substitutes for a detected subscription.
-2. **Narrative** — the daily brief (`/api/insights-brief`) and negotiation
-   call scripts (`/api/call-script`), streamed to the UI over SSE
-   (`event: start | delta | result | error | done`).
+This public repository contains **no SQL migrations, CREATE TABLE definitions, RLS policy DDL or SQLite implementation**. The table names and fields below are an application data contract inferred directly from typed interfaces and REST calls, not an exported database schema. No production schema installation, policy validation, backup/restore, RDS, failover or private read/write acceptance is asserted.
 
-Public requests always use deterministic rules/sample catalog responses over SSE,
-without provider or private database access. Owner-only narrative uses configured
-providers. `/api/health` reports `mode: "demo"`; capability flags indicate
-configuration only, not successful live execution.
+## Application data contract
 
-## Data flow by mode
+The shared domain is defined in [`src/lib/types.ts`](../src/lib/types.ts). `snapshot.mjs` maps snake_case or camelCase stored payloads into that domain.
 
-| Mode | Source of truth | Path to the UI |
-| --- | --- | --- |
-| `synthetic` | `src/data/persona.ts` (fictional, in repo) | Bundled with the client; also what `/api/snapshot` implies via `{ bundled: true }` when no access code is presented |
-| `owner` | Supabase tables | `/api/snapshot` with `x-access-code` header → gated PostgREST read → JSON snapshot |
+| REST resource / domain | Fields the application uses | Implemented access |
+|---|---|---|
+| `profile` / `Profile` | Name, email, location, summary and structured signals | Owner snapshot selects `id=1` |
+| `people` / `Person` | ID, name, emails, relationship, last contact, signals | Owner snapshot read; client relationship analysis |
+| `transactions` / `Transaction` | ID, date, merchant, nullable amount, currency, category, kind | Recent snapshot read; maintenance reads history for rollups |
+| `subscriptions` / `Subscription` | Merchant, cadence, costs, status, renewal dates, confidence | Snapshot read; manual maintenance PATCHes `next_renewal` |
+| `alternatives` / `Alternative` | Subscription reference, offer name, price, savings, source/status | Snapshot read; public catalog is bundled/sample data |
+| `insights` / `Insight` | Type, title, body, impact, status, creation time | Snapshot read; maintenance inserts derived insights |
+| `events` / `LifeEvent` | Date, title, attendees, calendar, recurrence, kind | Owner snapshot read |
+| `accounts` / `Account` | Institution, kind, last four, typical amount, evidence | Snapshot and maintenance read; no live bank API |
+| `actions` / `ActionItem` | Kind, target, payload, status and result | Owner writes from action/script/call routes; public requests are dry-run |
+| `runs` / maintenance receipt | Start/end, kind, status and statistics | Best-effort success/error insertion by manual maintenance |
 
-## Manual private ingestion
+No foreign-key, index, uniqueness or RLS constraint is implied by these TypeScript fields.
 
-`ingest-run` requires authenticated owner access. No body field substitutes for
-authorization, and this release disables its previous automatic schedule. Private
-MCP ingestion and database writes were not exercised during public verification.
+## Code paths worth reviewing
 
-## Key repo locations
+- [`snapshot.mjs`](../netlify/functions/snapshot.mjs): parallel reads from nine resources, bounded recent transactions/insights/actions, tolerant mapping into `Snapshot`.
+- [`action.mjs`](../netlify/functions/action.mjs): validates action kinds and payload; non-owner or dry-run requests return without writing; owner requests POST an `actions` record.
+- [`ingest-run.mjs`](../netlify/functions/ingest-run.mjs): authenticated manual POST using owner code or separate ingestion secret. Reads existing stored records, advances stale renewal dates, inserts deterministic insights and best-effort `runs` records. It does not itself fetch Gmail/Calendar or establish OAuth ingestion. No automatic schedule is configured.
+- [`_shared/runtime.mjs`](../netlify/functions/_shared/runtime.mjs): timing-safe secret comparison, bounded JSON reading and deterministic public outputs.
+- [`src/engine`](../src/engine): parsing/normalization, recurrence, spend/category calculations and relationship signals.
 
-- `src/lib/types.ts` — the single domain contract (Snapshot and friends)
-- `src/lib/api.ts` — fetch + SSE client (`streamSse`)
-- `src/engine/` — deterministic analytics
-- `src/screens/` — one component per sidebar destination
-- `src/data/persona.ts` — the synthetic persona
-- `netlify/functions/` — all server code
-- `netlify.toml` — redirects, CSP and security headers, manual-only ingestion
+## Deployment and evidence boundary
+
+Netlify serves the Vite build and Functions with same-origin CSP and no-store JSON responses. Public SSE routes return start/result/done or explicit errors. Owner-only narrative has provider code; live outbound call support is separately configured and was not exercised in this release.
+
+[`/api/health`](https://lifelens-copilot.netlify.app/api/health) explicitly reports demo mode and configuration-only capability flags. A true Supabase flag means variables are present, not that the schema, policy or private query succeeded. See [verification](VERIFICATION-2026-09-14.md) and [threat model](threat-model.md) for the limits.

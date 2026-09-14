@@ -25,21 +25,18 @@ version of this document is `src/data/sources.ts` (`dataProvenance`).
 
 ## 2. Owner mode — the owner's real snapshot (private)
 
-- **Origin:** derived from the **owner's own** Gmail and Google Calendar via
-  a consented, owner-initiated ingestion workflow (MCP tools run in a Claude
-  session). Receipts, bills, and calendar entries are parsed into the same
-  typed `Snapshot` shape the UI renders.
-- **Consent:** single-user tool — the owner reads only their own mailbox and
-  calendar under their own Google authorization. No one else's inbox is ever
-  accessed.
+- **Implemented owner input:** the snapshot function expects pre-existing private
+  Supabase records and maps them into the same typed `Snapshot` contract.
+  Mailbox/calendar ingestion described in older project notes is outside this
+  public repository's verified execution. The manual maintenance handler reads
+  stored records; it does not establish a live Gmail/Calendar OAuth connector.
 - **Storage implementation:** Netlify Functions access Supabase PostgREST
   with an anon API key plus the custom `x-lifelens-key` secret header.
   Database policies and real private reads/writes were not verified in this
   release; this document does not attest deployed row-level policies.
-- **Never in the repo:** owner data does not appear in this repository, in
-  the client bundle, in build artifacts, or in the public demo. It is served
-  only to a request carrying the correct access code, and labeled with the
-  `OWNER DATA` chip.
+- **Public fixture:** the checked-in persona and reviewed screenshots are fictional.
+  The snapshot source gates owner reads with an access code; no private data
+  access or complete historical-data audit is claimed by this documentation.
 
 ## Third parties in owner data
 

@@ -1,70 +1,63 @@
-# LifeLens — a clearer picture of everyday life
+# LifeLens
 
-[Open the public demo](https://lifelens-copilot.netlify.app) · [Source](https://github.com/shanto12/lifelens)
+**A personal life and money workspace with explainable results.** Built by Shanto Mathew.
 
-LifeLens combines deterministic spending analysis, subscription projections,
-relationship signals, and explainable next steps in a personal intelligence workspace.
-The public experience uses **Jordan Rivera, a fictional persona with a fixed July 1,
-2026 reference date**. Relative dates refer to that sample, not today's calendar.
-No private owner records are included in the demo.
+[Open the public demo](https://lifelens-copilot.netlify.app) · [Architecture & data model](docs/architecture.md) · [Demo walkthrough](docs/demo-script.md) · [Verification](docs/VERIFICATION-2026-09-14.md)
+
+**React 19 · TypeScript · Netlify Functions · deterministic analytics · Supabase adapter**
+
+![LifeLens public workspace: spending, subscriptions and relationship signals](docs/screenshots/workspace.png)
+
+*Actual production screenshot. Jordan Rivera is a fictional persona with a fixed July 1, 2026 reference date.*
+
+LifeLens turns a typed personal snapshot into spending rollups, subscription renewal projections, relationship signals and useful next steps. The public experience is reproducible: calculations, comparisons, briefs and scripts use deterministic rules and sample catalog data. The code also implements a separate owner-gated Supabase read/write path and optional provider integrations.
 
 ## Try it in 90 seconds
 
-1. **Home → Money:** inspect the sample totals, category filters and transaction evidence.
-2. **Subscriptions:** select a merchant, compare sample options and preview a draft action.
-3. **People / Health:** explore relationship cadence and nonclinical lifestyle observations.
-4. **Insights:** generate a reproducible brief from the visible aggregate inputs.
-5. **Actions:** enter a synthetic target and goal, generate a script, then preview the call workflow.
-6. **Connect / Guide:** see which integrations need setup and how the demo works.
+1. Open **Home → Money** to inspect the sample totals and transaction evidence.
+2. Open **Subs**, expand AT&T, then **Compare sample alternatives** to complete a labeled catalog comparison.
+3. Open **Insights → Generate snapshot brief**. The completed result identifies its rule-based source.
+4. Open **Actions**, use a synthetic target/goal, generate a script, then **Simulate call**. The result is a dry run; no call is placed.
+5. Explore **People**, **Health**, **Sources** and **Guide**. Owner integrations are explicitly gated.
 
-Public generation uses deterministic rules and sample catalog entries, with provenance
-shown in the interface. It makes no paid model calls. Comparisons are illustrations,
-not current vendor quotes. Drafts and dry runs do not send messages, place calls,
-cancel subscriptions, or mutate owner records. Demo actions are not persisted to the
-owner audit trail. Reloading restores the original fixture.
+![Completed LifeLens snapshot brief with deterministic provenance and dataset-derived figures](docs/screenshots/completed-brief.png)
 
-## Implementation
+*Completed public API workflow, not a design mockup. Values describe the sample dataset, not a bank balance or current vendor quote.*
 
-| Layer | Implementation |
-| --- | --- |
-| Interface | React 19, TypeScript, Vite, self-hosted fonts and Lucide icons |
-| Analysis | Typed receipt normalization, categorization, recurrence, spend rollups, relationship cadence and savings calculations in `src/engine` |
-| Public API | Netlify Functions, validated inputs, deterministic SSE results |
-| Owner narrative | Configured GLM / Grok integrations; private live execution is separate from public demo verification |
-| Owner storage | Server-side Supabase access, gated by owner access code; public clients receive only a bundled-persona marker |
-| Connections | Setup catalog; configured credentials do not establish a working OAuth connection |
-| Ingestion | Authenticated manual owner runner; automatic private-data schedule disabled |
-| Security | Same-origin CSP, no camera/microphone permissions, frame denial, HSTS, no-store API data |
+## Engineering to review
 
-Owner integrations remain optional deployment capabilities. `/api/health` reports
-configuration only; it does not prove provider availability, OAuth ingestion, or task
-completion. No owner snapshot, authenticated personal-data workflow, live outbound
-call, or private database mutation was exercised for this portfolio release.
+| Capability | Implementation |
+|---|---|
+| Typed domain | [`src/lib/types.ts`](src/lib/types.ts): profile, transactions, subscriptions, people, alternatives, insights, events, accounts and actions |
+| Explainable analysis | [`src/engine`](src/engine): normalization, recurrence, spend rollups and relationship calculations |
+| Public/private boundary | [`_shared/runtime.mjs`](netlify/functions/_shared/runtime.mjs): owner-secret comparison, bounded input parsing and deterministic response helpers |
+| Streaming results | [`netlify/functions`](netlify/functions): validated SSE routes; public requests use sample/rule-based paths |
+| Owner database reads | [`snapshot.mjs`](netlify/functions/snapshot.mjs): server-side Supabase PostgREST reads and typed mapping |
+| Owner writes and maintenance | [`action.mjs`](netlify/functions/action.mjs) records actions; [`ingest-run.mjs`](netlify/functions/ingest-run.mjs) reads stored records, updates renewals and inserts insights/run records behind a manual authorization gate |
 
-## Local development
+The [architecture and data model](docs/architecture.md) distinguish the implemented Supabase adapter from database infrastructure evidence. **No SQL migrations, DDL or SQLite implementation are included in this repository.** Deployed schema, RLS policies, private reads/writes and owner-provider execution were not verified in the public release. The adapter sends a server-side anon key plus a custom gate header; it does not use a service-role key. No RDS or database HA claim is made.
 
-```bash
+## Verified public release
+
+September 14, 2026, Central Time: all nine public views were inspected in Shanto's real Chrome profile; comparisons, a snapshot brief, a script and dry-run action completed. Isolated browser checks covered 62 workflow assertions and desktop/mobile layouts. The backend release passed 100 tests and a production npm audit with zero reported vulnerabilities; the final label-only change had targeted lint/build verification. [Evidence and exact limits](docs/VERIFICATION-2026-09-14.md).
+
+## Run locally
+
+```sh
 npm ci
-netlify dev
+npm run dev
 ```
 
-`npm run dev` serves only the Vite interface, which falls back to the bundled persona
-when functions are unavailable. `netlify dev` serves the API workflows too.
+Vite serves the UI and falls back to the bundled persona when Functions are unavailable. For local API/SSE routes, use the Netlify CLI with `netlify dev` from the repository root; see [Netlify's local development documentation](https://docs.netlify.com/api-and-cli-guides/cli-guides/local-development/).
 
-```bash
-npm run verify:release   # lint, tests, production build, production dependency audit
+```sh
+npm run verify:release
 ```
 
-The suite covers deterministic engines, owner-session boundaries, public endpoint
-validation and no-external-call guarantees. Browser verification must target the
-published URL as a separate release gate.
+This runs lint, tests, production build and production dependency audit. Tests stub external boundaries; they do not prove an active owner database or live provider account. Browser acceptance is a separate deployed-site gate. Optional server configuration names are in [`.env.example`](.env.example); secrets must stay outside Git and client bundles.
 
-## Configuration and privacy
+## Scope
 
-Secrets belong in Netlify environment variables, never client bundles or Git.
-See `.env.example` for names and `netlify/functions/` for the implementation.
-Owner access uses a shared code, not a multi-user identity system. The public demo
-requires no login. Do not enter real personal data into public demo fields.
+The public demo needs no login and includes no owner records. Catalog comparisons, draft actions and call simulations do not send messages, cancel subscriptions, place calls or mutate the owner database. Public activity is session-only; reload restores the fixture. Owner access is a shared code, not multi-user identity. Private ingestion is manual; automatic scheduling is disabled. A health configuration flag is not provider or database completion proof.
 
-This is an independent portfolio application. Lifestyle observations are sample
-signals, not medical assessment; spending examples are not financial advice.
+This independent portfolio project demonstrates application engineering with clear data boundaries. Lifestyle observations are nonclinical sample signals, and spending examples are illustrative. See [known limits](docs/known-limits.md) and [threat model](docs/threat-model.md).

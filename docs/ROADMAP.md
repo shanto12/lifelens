@@ -1,3 +1,9 @@
+> Historical design ideas, not current acceptance evidence. Integration availability,
+> vendor pricing and shipped labels below were not reverified in the September 14
+> portfolio release. Use the [current architecture](architecture.md) and
+> [verification](VERIFICATION-2026-09-14.md): public workflows are deterministic,
+> private ingestion is manual, and owner database/provider paths are unverified.
+
 # LifeLens — UX & Integrations Roadmap
 
 Ideas for making LifeLens prettier, faster, and genuinely more helpful — plus the
