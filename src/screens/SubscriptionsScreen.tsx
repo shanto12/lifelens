@@ -104,7 +104,7 @@ function StreamBox({ text, streaming, error }: { text: string; streaming: boolea
   }, [text.length])
   return (
     <div ref={ref} className={streaming ? 'stream-box pulsing' : 'stream-box'} aria-live="polite">
-      {error !== null ? <span className="neg">{error}</span> : text || 'Contacting research model…'}
+      {error !== null ? <span className="neg">{error}</span> : text || 'Preparing comparison…'}
     </div>
   )
 }
@@ -135,7 +135,7 @@ const SubscriptionRow = memo(function SubscriptionRow({
   const showStream = ai.streaming || ai.error !== null || (ai.result === null && ai.text !== '')
 
   const runResearch = () => {
-    setAi({ streaming: true, text: '', result: null, error: null, meta: null })
+    setAi({ streaming: true, text: mode === 'synthetic' ? 'Preparing sample comparison…' : 'Contacting research model…', result: null, error: null, meta: null })
     void streamSse<AlternativesResult>(
       '/api/alternatives',
       {
